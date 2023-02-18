@@ -12,8 +12,9 @@ development_cod = development.encode(encoding='utf-8')
 soket_cod = soket.encode(encoding='utf-8')
 decorator_cod = decorator.encode(encoding='utf-8')
 
-print(f'"Разработка" тип - {type(development_cod)}\n"Сокет" тип - {type(soket_cod)}\n'
-      f'"Декоратор" тип - {type(decorator_cod)}\n')
+print(f'"Разработка" тип - {type(development_cod)}\n"Разработка" кодовые точки - {development_cod}\n\n'
+      f'"Сокет" тип - {type(soket_cod)}\n"Сокет" кодовые точки - {soket_cod}\n\n'
+      f'"Декоратор" тип - {type(decorator_cod)}\n"Декоратор" кодовые точки - {decorator_cod}\n')
 
 # task 2
 
@@ -37,6 +38,8 @@ word_class = b'класс'
 word_func = b'функция'
 word_type = b'type'
 """
+
+# появляется ошибка SyntaxError, ее разве можно обработать?
 
 print("Невозможно записать в байтовом типе - 'класс' и 'функция'\n")
 
@@ -75,10 +78,17 @@ for i in list_url:
 
 # task 6
 
+import locale
+
 print('task_6', end='\n\n')
 
-a = open('test_file.txt', 'r+', encoding='utf-8')
-a.write(f'сетевое программирование\nсокет\nдекоратор\n')
-for line in a:
+file = open('test_file.txt', 'w')
+file.write(f'сетевое программирование\nсокет\nдекоратор\n')
+file.close()
+
+print(f'Используемая кодировка {locale.getpreferredencoding()}\n')
+
+file = open('test_file.txt', 'r', encoding='utf-8')
+for line in file:
       print(line)
-a.close()
+file.close()
