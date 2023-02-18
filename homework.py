@@ -32,16 +32,19 @@ print(f'Тип "class" - {type(word_1)}\nТип "function" - {type(word_2)}\nТ�
 
 print('task_3', end='\n\n')
 
-"""
-word_attribute = b'attribute'
-word_class = b'класс'
-word_func = b'функция'
-word_type = b'type'
-"""
+word_attribute = 'attribute'
+word_class = 'класс'
+word_func = 'функция'
+word_type = 'type'
 
-# появляется ошибка SyntaxError, ее разве можно обработать?
+word_list = [word_attribute, word_class, word_func, word_type]
 
-print("Невозможно записать в байтовом типе - 'класс' и 'функция'\n")
+for i in word_list:
+      try:
+            print(bytes(i, 'ascii'))
+      except UnicodeEncodeError:
+            print(f'Слово "{i}" нельзя записать в байтовом типе')
+
 
 # task 4
 
@@ -59,17 +62,18 @@ for i in list_word:
 
 print('task_5', end='\n\n')
 
-import subprocess
+import subprocess, chardet
 
 list_url = ['yandex.ru', 'youtube.com']
 for i in list_url:
       args = ['ping', i]
-
       subproc_ping = subprocess.Popen(args, stdout=subprocess.PIPE)
       result = []
       count = 0
-      for i in subproc_ping.stdout:
-            result.append(i.decode('utf-8'))
+      for line in subproc_ping.stdout:
+            res = chardet.detect(line)
+            line = line.decode(res['encoding']).encode('utf-8')
+            result.append(line.decode('utf-8'))
             count += 1
             if count == 6:
                   break
@@ -78,17 +82,22 @@ for i in list_url:
 
 # task 6
 
-import locale
-
 print('task_6', end='\n\n')
 
 file = open('test_file.txt', 'w')
 file.write(f'сетевое программирование\nсокет\nдекоратор\n')
 file.close()
 
-print(f'Используемая кодировка {locale.getpreferredencoding()}\n')
+file = open('test_file.txt', 'rb')
+detector = chardet.universaldetector.UniversalDetector()
+for line in file:
+      detector.feed(line)
+      if detector.done:
+            break
+detector.close()
+print(f'Используемая кодировка {detector.result["encoding"]}\n')
 
-file = open('test_file.txt', 'r', encoding='utf-8')
+file = open('test_file.txt', 'r', encoding=detector.result["encoding"])
 for line in file:
       print(line)
 file.close()
