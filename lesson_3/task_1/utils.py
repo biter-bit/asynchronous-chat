@@ -1,10 +1,10 @@
-import sys, datetime, json
+import sys, json, socket
 
 
-def install_param_in_socket(socket_create, way):
+def install_param_in_socket():
     """Устанавливаем введенные пользователем параметры подключения к серверу/создания сервера"""
     param = sys.argv
-    port = 10001
+    port = 10002
     addr = 'localhost'
     try:
         for i in param:
@@ -12,39 +12,34 @@ def install_param_in_socket(socket_create, way):
                 port = int(param[param.index(i)+1])
             if i == '-a':
                 addr = param[param.index(i)+1]
-        if way == 'connect':
-            socket_create.connect((addr, port))
-        elif way == 'bind':
-            socket_create.bind((addr, port))
-        return 'OK'
+        sys_param_reboot()
+        return addr, port
     except Exception as error:
-        return error
+        name_error = 'Ошибка'
+        return error, name_error
 
 
-def message_processing(message):
-    """Принимаем сообщение от клиента и обрабатываем его"""
-    if 'action' in message and message['action'] == 'presence' and 'time' in message and 'user' in message and \
-            message['user']['account_name'] == 'Michael':
-        return {'response': 200, 'alert': 'Сообщение принято'}
-    else:
-        return {'response': 400, 'alert': 'Сообщение отклонено'}
-
-
-def create_message():
-    """Создаем сообщение для отправки на сервер."""
-    msg = {
-        "action": 'presence',
-        'time': datetime.datetime.now().strftime('%d.%m.%Y'),
-        'user': {
-            'account_name': 'Michael',
-        }
-    }
-    return msg
-
-
-def send_message(message, client_obj):
-    """Сериализуем и отправляем сообщение на сервер."""
+def serialization_message(message):
+    """Сериализуем сообщение"""
     js_msg = json.dumps(message)
     js_msg_encode = js_msg.encode('utf-8')
-    client_obj.send(js_msg_encode)
-    return 'OK'
+    return js_msg_encode
+
+
+def deserialization_message(message):
+    """Десериализация сообщения"""
+    js_msg_decode = message.decode('utf-8')
+    js_msg = json.loads(js_msg_decode)
+    return js_msg
+
+
+def init_socket_tcp():
+    """Инициализация сокета"""
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    return s
+
+
+def sys_param_reboot():
+    """Обновление параметров командной строки"""
+    sys.argv = [sys.argv[0]]
+    return sys.argv
