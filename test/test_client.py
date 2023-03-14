@@ -1,7 +1,7 @@
 import unittest
-from lesson_3.task_1.client import create_message
-from lesson_3.task_1.client import main as client_main
-from lesson_3.task_1.server import main as server_main
+from client import create_message
+from client import main as client_main
+from server import main as server_main
 import datetime
 
 

@@ -1,6 +1,6 @@
 import unittest
-from lesson_3.task_1.client import create_message
-from lesson_3.task_1.server import message_processing
+from client import create_message
+from server import message_processing
 import datetime
 
 

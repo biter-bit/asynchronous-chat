@@ -1,7 +1,7 @@
 import unittest
 import socket
 import sys
-from lesson_3.task_1.utils import install_param_in_socket, serialization_message, deserialization_message, \
+from utils import install_param_in_socket, serialization_message, deserialization_message, \
     init_socket_tcp, sys_param_reboot
 
 
