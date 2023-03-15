@@ -1,10 +1,12 @@
 from utils import init_socket_tcp, serialization_message, deserialization_message, sys_param_reboot
+from decorators import log
 import datetime, logging, sys
 from log import client_log_config
 
 app_log_client = logging.getLogger('client')
 
 
+@log
 def create_message():
     """Создаем сообщение для отправки на сервер."""
     msg = {
