@@ -1,8 +1,9 @@
 import unittest
 import socket
 import sys
-from utils import install_param_in_socket, serialization_message, deserialization_message, \
+from utils import serialization_message, deserialization_message, \
     init_socket_tcp, sys_param_reboot
+from client import install_param_in_socket_client
 
 
 class UnitClientServerTest(unittest.TestCase):
@@ -11,7 +12,7 @@ class UnitClientServerTest(unittest.TestCase):
         param = sys.argv
         param.extend(['-p', 10003, '-a', 'localhost'])
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        addr, port = install_param_in_socket()
+        addr, port = install_param_in_socket_client()
         s.close()
         self.assertEqual(('localhost', 10003), (addr, port))
 
@@ -19,7 +20,7 @@ class UnitClientServerTest(unittest.TestCase):
         param = sys.argv
         param.extend(['-p', 'dsf', '-a', 'localhost'])
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        error, name_error = install_param_in_socket()
+        error, name_error = install_param_in_socket_client()
         s.close()
         self.assertEqual('Ошибка', name_error)
 
