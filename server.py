@@ -24,7 +24,7 @@ def message_processing(message):
 def install_param_in_socket_server():
     """Устанавливаем введенные пользователем параметры подключения к серверу/создания сервера"""
     param = sys.argv
-    port = 10002
+    port = 10003
     addr = 'localhost'
     try:
         for i in param:

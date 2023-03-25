@@ -1,6 +1,6 @@
 from utils import init_socket_tcp, serialization_message, deserialization_message, sys_param_reboot
 from decorators import log
-import datetime, logging, sys, json
+import datetime, logging, sys, json, threading, time
 from log import client_log_config
 
 app_log_client = logging.getLogger('client')
@@ -24,7 +24,7 @@ def create_message(message, user_name):
 def install_param_in_socket_client():
     """Устанавливаем введенные пользователем параметры подключения к серверу/создания сервера"""
     param = sys.argv
-    port = 10002
+    port = 10003
     addr = 'localhost'
     try:
         for i in param:
@@ -66,28 +66,38 @@ def deserialization_message_list(message):
     return list_deserialization_message
 
 
+def send_message(serv):
+    user_name = input('Введите ваше имя >> ')
+    while True:
+        msg = create_message(input(''), user_name)
+        byte_msg = serialization_message(msg)
+        app_log_client.info('Сообщение сериализовано')
+        serv.send(byte_msg)
+        time.sleep(1)
+
+
+def get_message(serv):
+    while True:
+        data = serv.recv(1024)
+        list_message = deserialization_message_list(data)
+        for i in list_message:
+            app_log_client.info('Сообщение десериализовано')
+            app_log_client.info('Ответ получен. %s %s', i['response'], i['alert'])
+            print(f"{i['user_name']} >> {i['message']}")
+        time.sleep(1)
+
+
 def main():
     server = init_socket_tcp()
     app_log_client.info('Сокет инициализирован')
     addr, port = install_param_in_socket_client()
     server.connect((addr, port))
 
-    while True:
-        msg = input('Отправляем или принимаем сообщение? (w - отправляем, r - принимаем) >> ')
-        if msg == 'exit':
-            break
-        if msg == 'r':
-            data = server.recv(1024)
-            list_message = deserialization_message_list(data)
-            for i in list_message:
-                app_log_client.info('Сообщение десериализовано')
-                app_log_client.info('Ответ получен. %s %s', i['response'], i['alert'])
-                print(f"{i['user_name']} >> {i['message']}")
-        if msg == 'w':
-            msg = create_message(input('>> '), 'Michael')
-            byte_msg = serialization_message(msg)
-            app_log_client.info('Сообщение сериализовано')
-            server.send(byte_msg)
+    t_send_message = threading.Thread(target=send_message, args=(server,), name='theard-1')
+    t_send_message.start()
+
+    t_get_message = threading.Thread(target=get_message, args=(server,), name='theard-2')
+    t_get_message.start()
 
 
 if __name__ == '__main__':
