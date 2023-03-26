@@ -1,16 +1,15 @@
-# This is a sample Python script.
-
-# Press Shift+F10 to execute it or replace it with your code.
-# Press Double Shift to search everywhere for classes, files, tool windows, actions, and settings.
+import subprocess, multiprocessing, sys
 
 
-def print_hi(name):
-    # Use a breakpoint in the code line below to debug your script.
-    print(f'Hi, {name}')  # Press Ctrl+F8 to toggle the breakpoint.
+def client_start():
+    subprocess.Popen('python client.py', shell=True).wait()
 
 
-# Press the green button in the gutter to run the script.
 if __name__ == '__main__':
-    print_hi('PyCharm')
-
-# See PyCharm help at https://www.jetbrains.com/help/pycharm/
+    param = sys.argv
+    count = 1
+    for i in param:
+        if i == '-c':
+            count = int(param[param.index(i) + 1])
+    for i in range(count):
+        multiprocessing.Process(target=client_start, name=f'prc-{i}').start()

@@ -66,10 +66,9 @@ def deserialization_message_list(message):
     return list_deserialization_message
 
 
-def send_message(serv):
-    user_name = input('Введите ваше имя >> ')
+def send_message(serv, name):
     while True:
-        msg = create_message(input(''), user_name)
+        msg = create_message(input(''), name)
         byte_msg = serialization_message(msg)
         app_log_client.info('Сообщение сериализовано')
         serv.send(byte_msg)
@@ -93,7 +92,7 @@ def main():
     addr, port = install_param_in_socket_client()
     server.connect((addr, port))
 
-    t_send_message = threading.Thread(target=send_message, args=(server,), name='theard-1')
+    t_send_message = threading.Thread(target=send_message, args=(server, server.getsockname()[1]), name='theard-1')
     t_send_message.start()
 
     t_get_message = threading.Thread(target=get_message, args=(server,), name='theard-2')
