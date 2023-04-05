@@ -8,6 +8,5 @@ class ServerCheckPort:
         if int(value) < 0:
             raise Exception('The port value is less then 0')
         setattr(instance, '_name_port', value)
-
     def __delete__(self, instance):
         raise AttributeError("Невозможно удалить атрибут")
