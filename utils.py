@@ -1,4 +1,4 @@
-import sys, json, socket
+import sys, json, socket, hashlib, secrets
 
 
 def serialization_message(message):
@@ -28,7 +28,7 @@ def sys_param_reboot():
 
 
 def decode_message(message):
-    dec_mes = message.decode('utf-8')
+    dec_mes = message.decode('unicode_escape')
     return dec_mes
 
 
@@ -43,10 +43,26 @@ def split_message(replace_mes):
 
 
 def deserialization_message_list(message):
-    list_deserialization_message = []
+    deserialize_list = []
     d_mes = decode_message(message)
-    r_mes = replace_data_message(d_mes)
-    s_mes = split_message(r_mes)
-    for i in s_mes:
-        list_deserialization_message.append(json.loads(i))
-    return list_deserialization_message
+    d_rep = replace_data_message(d_mes)
+    result = d_rep.split(' , ')
+    for i in result:
+        deserialize_list.append(json.loads(i))
+    return deserialize_list
+
+
+def registration_user():
+    pass
+
+
+def hashing_password(password):
+    hash_obj = hashlib.sha256()
+    hash_obj.update(password.encode())
+    hash_code = hash_obj.digest().hex()
+    return hash_code
+
+
+def token_create():
+    token = secrets.token_hex(32)
+    return token
