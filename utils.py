@@ -1,4 +1,4 @@
-import sys, json, socket, hashlib, secrets
+import sys, json, socket, hashlib, logging, inspect
 
 
 def serialization_message(message):
@@ -52,10 +52,6 @@ def deserialization_message_list(message):
     return deserialize_list
 
 
-def registration_user():
-    pass
-
-
 def hashing_password(password):
     hash_obj = hashlib.sha256()
     hash_obj.update(password.encode())
@@ -63,6 +59,16 @@ def hashing_password(password):
     return hash_code
 
 
-def token_create():
-    token = secrets.token_hex(32)
-    return token
+def log(func):
+    def wrapper(*args, **kwargs):
+        LOGGER = logging.getLogger('client_front')
+        if 'client_front.py' in sys.argv[0].split('/'):
+            LOGGER = logging.getLogger('client_front')
+        if 'server_back.py' in sys.argv[0].split('/'):
+            LOGGER = logging.getLogger('server_back')
+        LOGGER.info(f'Используется функция {func.__name__} с параметрами {args}, {kwargs}. '
+                    f'Вызвана из функции {inspect.stack()[1][3]}')
+        result = func(*args, **kwargs)
+        LOGGER.info(f'Функция {func.__name__} выполнилась')
+        return result
+    return wrapper

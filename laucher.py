@@ -2,7 +2,7 @@ import subprocess, multiprocessing, sys
 
 
 def client_start():
-    subprocess.Popen('python client.py', shell=True).wait()
+    subprocess.Popen('python client_front.py', shell=True).wait()
 
 
 if __name__ == '__main__':

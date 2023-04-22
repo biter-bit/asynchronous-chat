@@ -1,7 +1,7 @@
 import logging
 from logging import handlers
 
-# создаем обьект логгера с именем "server"
+# создаем обьект логгера с именем "server_back"
 log_server = logging.getLogger('server')
 
 # создаем обьект логгера для фиксации чата с именем "chat"

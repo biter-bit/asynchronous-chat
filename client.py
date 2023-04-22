@@ -1,14 +1,26 @@
 from utils import init_socket_tcp, serialization_message, sys_param_reboot, deserialization_message_list
-from decorators import log
-import datetime, logging, sys, json, threading, time, socket
-from log import client_log_config
+import datetime, logging, sys, json, threading, time
 from metaclasses import ClientVerifier
-from variables import TOKEN_AUTHORIZED
+from client_database.crud import ClientStorage
+from client_database.model import History, Contacts
+from log.log_client import client_log_config
 
 app_log_client = logging.getLogger('client')
 
 
-def create_message_text(account_name='', message='', token=''):
+def create_message_get_users(account_name, token):
+    msg = {
+        "action": 'get_users',
+        'time': datetime.datetime.now().strftime('%d.%m.%Y'),
+        'user': {
+            'user_login': account_name,
+            'token': token
+        },
+    }
+    return msg
+
+
+def create_message_text(account_name='', message='', token='', to=''):
     msg = {
         "action": 'presence',
         'time': datetime.datetime.now().strftime('%d.%m.%Y'),
@@ -16,7 +28,8 @@ def create_message_text(account_name='', message='', token=''):
             'user_login': account_name,
             'token': token
         },
-        'mess_text': message
+        'mess_text': message,
+        'to': to
     }
     return msg
 
@@ -33,54 +46,59 @@ def create_message_authorized(login, password):
     return msg
 
 
-def create_message_logout(login):
+def create_message_logout(login, token):
     msg = {
         'action': 'quit',
         'time': datetime.datetime.now().strftime('%d.%m.%Y'),
         'user': {
-            'user_login': login
+            'user_login': login,
+            'token': token
         }
     }
     return msg
 
 
-def create_message_get_contacts(login):
+def create_message_get_contacts(login, token):
     msg = {
         'action': 'get_contacts',
         'time': datetime.datetime.now().strftime('%d.%m.%Y'),
         'user': {
-            'user_login': login
+            'user_login': login,
+            'token': token
         }
     }
     return msg
 
 
-def create_message_add_contact(nickname, login):
+def create_message_add_contact(nickname, login, token):
     msg = {
         'action': 'add_contact',
         'user_id': nickname,
         'time': datetime.datetime.now().strftime('%d.%m.%Y'),
         'user': {
-            'user_login': login
+            'user_login': login,
+            'token': token
         }
     }
     return msg
 
 
-def create_message_del_contact(nickname, login):
+def create_message_del_contact(nickname, login, token):
     msg = {
         'action': 'del_contact',
         'user_id': nickname,
         'time': datetime.datetime.now().strftime('%d.%m.%Y'),
         'user': {
-            'user_login': login
+            'user_login': login,
+            'token': token
         }
     }
     return msg
 
 
 class ClientSender(threading.Thread, metaclass=ClientVerifier):
-    def __init__(self, sock, account_name, token):
+    def __init__(self, sock, account_name, token, database):
+        self.database = database
         self.sock = sock
         self.account_name = account_name
         self.token = token
@@ -88,41 +106,61 @@ class ClientSender(threading.Thread, metaclass=ClientVerifier):
         self._stop_event = threading.Event()
 
     def send_message(self):
+        self.print_help()
         while True:
             message = input()
             if message == '/quit':
-                msg = create_message_logout(self.account_name)
+                msg = create_message_logout(self.account_name, self.token)
                 app_log_client.info('Сообщение создано')
                 byte_msg = serialization_message(msg)
                 app_log_client.info('Сообщение сериализовано')
                 self.sock.send(byte_msg)
                 self.stop()
             elif message == '/contacts':
-                msg = create_message_get_contacts(self.account_name)
-                app_log_client.info('Сообщение создано')
-                byte_msg = serialization_message(msg)
-                app_log_client.info('Сообщение сериализовано')
-                self.sock.send(byte_msg)
+                result = self.database.get_contacts()
+                print(result)
             elif message == '/add_contact':
                 nickname = input('Никнейм пользователя, который хотите добавить в список контактов >> ')
-                msg = create_message_add_contact(nickname, self.account_name)
+                msg = create_message_add_contact(nickname, self.account_name, self.token)
                 app_log_client.info('Сообщение создано')
                 byte_msg = serialization_message(msg)
                 app_log_client.info('Сообщение сериализовано')
                 self.sock.send(byte_msg)
             elif message == '/del_contact':
                 nickname = input('Никнейм пользователя, который хотите удалить из контактов >> ')
-                msg = create_message_del_contact(nickname, self.account_name)
+                msg = create_message_del_contact(nickname, self.account_name, self.token)
+                app_log_client.info('Сообщение создано')
+                byte_msg = serialization_message(msg)
+                app_log_client.info('Сообщение сериализовано')
+                self.sock.send(byte_msg)
+            elif message == '/help':
+                self.print_help()
+            elif message == '/message':
+                to = input('Введите получателя >> ')
+                mes = input('Введите сообщение >> ')
+                msg = create_message_text(message=mes, account_name=self.account_name, token=self.token, to=to)
+                app_log_client.info('Сообщение создано')
+                byte_msg = serialization_message(msg)
+                app_log_client.info('Сообщение сериализовано')
+                self.sock.send(byte_msg)
+            elif message == '/get_users':
+                msg = create_message_get_users(self.account_name, token=self.token)
                 app_log_client.info('Сообщение создано')
                 byte_msg = serialization_message(msg)
                 app_log_client.info('Сообщение сериализовано')
                 self.sock.send(byte_msg)
             else:
-                msg = create_message_text(message=message, account_name=self.account_name, token=self.token)
-                app_log_client.info('Сообщение создано')
-                byte_msg = serialization_message(msg)
-                app_log_client.info('Сообщение сериализовано')
-                self.sock.send(byte_msg)
+                self.print_help()
+
+    def print_help(self):
+        print('\n')
+        print('Поддерживаемые команды:', end='\n\n')
+        print('/message - отправить сообщение. Кому и текст будет запрошены отдельно.')
+        print('/add_contact - добавить пользователя в список контактов')
+        print('/del_contact - удалить пользователя из списка контактов')
+        print('/contacts - список контактов')
+        print('/help - вывести подсказки по командам')
+        print('/quit - выход из программы')
 
     def run(self):
         self.send_message()
@@ -132,7 +170,8 @@ class ClientSender(threading.Thread, metaclass=ClientVerifier):
 
 
 class ClientRecipient(threading.Thread, metaclass=ClientVerifier):
-    def __init__(self, sock, account_name):
+    def __init__(self, sock, account_name, database):
+        self.database = database
         self.sock = sock
         self.account_name = account_name
         super().__init__()
@@ -149,14 +188,24 @@ class ClientRecipient(threading.Thread, metaclass=ClientVerifier):
                 print('Пока!')
                 self.stop()
             elif 'user_name' in i and i['user_name'] != self.account_name:
-                print(f"{i['user_name']} >> {i['message']}")
+                self.database.add_message(i['user_name'], i['from'], i['alert'])
+                print(f"{i['user_name']} >> {i['alert']}")
                 time.sleep(1)
+            elif i['response'] == 200 and i['alert'] == 'Сообщение доставлено':
+                self.database.add_message(i['user_name'], i['to'], i['message'])
+                print(i['alert'])
             elif i['response'] == 200 and i['alert'] == 'Пользователь добавлен в контакты':
+                self.database.add_contact(i['to_user'])
                 print(i['alert'])
             elif i['response'] == 200 and i['alert'] == 'Пользователь удален из контактов':
+                self.database.del_contact(i['to_user'])
                 print(i['alert'])
-            elif i['response'] == 202:
+            elif i['response'] == 400 and i['alert'] == 'Для добавления пользователь должен быть в базе':
                 print(i['alert'])
+            elif i['response'] == 400 and i['alert'] == 'Для удаления пользователь должен быть в базе':
+                print(i['alert'])
+            elif i['response'] == 200 and i['alert'] == 'Список пользователей отправлен':
+                print(str(i['users']))
         time.sleep(1)
 
     def run(self):
@@ -197,7 +246,8 @@ def authorization_user(server):
                     print('Установлено соединение с сервером.')
                     app_log_client.info(f'Запущен клиент с параметрами: адрес сервера: {addr}, порт: {port}, '
                                         f'имя пользователя: {result_data["name_account"]}')
-                elif i['response'] == 302:
+                elif i['response'] == 401:
+                    print('Неправильный логин или пароль. Попробуйте еще раз.')
                     app_log_client.info(f'Соединение с сервером не установлено. Ответ сервера: {response}')
         return result_data
     except json.JSONDecodeError:
@@ -228,6 +278,27 @@ def install_param_in_socket_client():
         return error, name_error
 
 
+def database_load(sock, database, user_login, token):
+    # создаем сообщение запроса
+    msg = create_message_get_contacts(user_login, token)
+    app_log_client.info('Сообщение создано')
+
+    # сериализуем сообщение для отправки и отправляем
+    byte_msg = serialization_message(msg)
+    app_log_client.info('Сообщение сериализовано')
+    sock.send(byte_msg)
+
+    # получаем сообщение от сервера и добавляем контакты в б.д.
+    data = sock.recv(4096)
+    list_message = deserialization_message_list(data)
+    app_log_client.info('Сообщение десериализовано')
+    for i in list_message:
+        app_log_client.info('Ответ получен. %s %s', i['response'], i['alert'])
+        if i['response'] == 202:
+            database.add_contacts(i['alert'])
+    return 'Ok'
+
+
 def main():
     # инициализируем сокет
     print('Консольный мессенджер')
@@ -240,19 +311,23 @@ def main():
     app_log_client.info('Сокет инициализирован')
 
     # подключаемся к серверу
-    server.connect((addr, port))
     app_log_client.info('Подключение к серверу...')
+    server.connect((addr, port))
 
     # авторизация пользователя
     data = authorization_user(server)
 
+    # инициализация базы данных
+    database = ClientStorage(data['name_account'])
+    database_load(server, database, data['name_account'], data['token'])
+
     # создаем поток отправки сообщения от сервера
-    client_sender = ClientSender(server, data['name_account'], data['token'])
+    client_sender = ClientSender(server, data['name_account'], data['token'], database)
     client_sender.daemon = True
     client_sender.start()
 
     # создаем поток принятия сообщения от сервера
-    client_recipient = ClientRecipient(server, data['name_account'])
+    client_recipient = ClientRecipient(server, data['name_account'], database)
     client_recipient.daemon = True
     client_recipient.start()
     app_log_client.debug('Запущены процессы')

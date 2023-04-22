@@ -13,6 +13,7 @@ class User(Base):
     password = Column(String, nullable=False)
     token = Column(String)
     info = Column(String)
+    role = Column(String, nullable=False)
     authorized = Column(Boolean, default=False)
 
 
@@ -21,6 +22,7 @@ class History(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     create_at = Column(DateTime, default=datetime.datetime.utcnow)
+    login = Column(String)
     ip_address = Column(String)
 
 

@@ -1,6 +1,6 @@
 import logging
 
-# создаем обьект логгера с именем "client"
+# создаем обьект логгера с именем "client_front"
 log_server = logging.getLogger('client')
 
 # создаем формат сообщения для логгера
