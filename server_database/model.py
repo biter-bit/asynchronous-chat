@@ -32,3 +32,14 @@ class Contacts(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     owner_id = Column(Integer, ForeignKey('users.id'))
     client_id = Column(Integer, ForeignKey('users.id'))
+
+
+class HistoryMessageUsers(Base):
+    __tablename__ = 'history_message'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    from_user_id = Column(String, ForeignKey('users.id'))
+    to_user_id = Column(String, ForeignKey('users.id'))
+    message = Column(String)
+    create_at = Column(DateTime, default=datetime.datetime.now())
+    hash_message = Column(String)

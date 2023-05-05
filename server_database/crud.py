@@ -1,9 +1,12 @@
+import random
+
 from faker import Faker
-from server_database.model import User, History, Contacts, Base
+from server_database.model import User, History, Contacts, Base, HistoryMessageUsers
 import sqlalchemy
 from variables import SQLALCHEMY_SERVER_DATABASE_URL
-from sqlalchemy.orm import sessionmaker
-import secrets
+from sqlalchemy.orm import sessionmaker, aliased
+import secrets, datetime, hashlib
+from sqlalchemy import or_, asc, desc
 
 
 class ServerStorage:
@@ -30,6 +33,7 @@ class ServerStorage:
                 session.add(History(ip_address=self.fake.ipv4(), login=self.fake.user_name()))
                 session.add(Contacts(owner_id=self.fake.random_int(min=0, max=10),
                                      client_id=self.fake.random_int(min=0, max=10)))
+                session.add(HistoryMessageUsers(from_user_id=1, to_user_id=1, message=self.fake.text(20), hash_message=str(random.getrandbits(128))))
                 session.commit()
         return 'Ok'
 
@@ -52,6 +56,18 @@ class ServerStorage:
             session.commit()
         return 'Ok'
 
+    def register(self, login, password):
+        with self.Session() as session:
+            user = User(login=login, password=password, role='Пользователь')
+            session.add(user)
+            session.commit()
+        return 'Ok'
+
+    def hash_password(self, password):
+        encode_password = password.encode('utf-8')
+        result = hashlib.md5(encode_password).hexdigest()
+        return result
+
     def get_contacts(self, user_login):
         with self.Session() as session:
             client_id_contact = session.query(Contacts).join(User, User.id == Contacts.owner_id).\
@@ -62,12 +78,66 @@ class ServerStorage:
             session.commit()
         return id_list_contacts
 
+    def get_user_role(self, login):
+        with self.Session() as session:
+            user = session.query(User.role).filter(User.login == login).first()
+            if user:
+                user = user[0]
+            session.commit()
+        return user
+
     def get_users(self):
         with self.Session() as session:
             users = session.query(User).all()
             list_users = [i.login for i in users]
             session.commit()
         return list_users
+
+    def get_history_users(self):
+        with self.Session() as session:
+            users = self.get_users()
+            login_history = session.query(History.login).join(User, History.login == User.login).filter(History.login.in_(users))
+            list_login_history = [i[0] for i in login_history]
+            session.commit()
+        return list_login_history
+
+    def get_history_user(self, login):
+        with self.Session() as session:
+            obj_history = session.query(History).filter_by(login=login).first()
+            session.expunge(obj_history)
+            session.commit()
+        return obj_history
+
+    def add_history_message(self, from_user, to_user, message):
+        with self.Session() as session:
+            from_user_login = session.query(User).filter(User.login == from_user).first()
+            to_user_login = session.query(User).filter(User.login == to_user).first()
+            new_message = HistoryMessageUsers(from_user_id=from_user_login.id, to_user_id=to_user_login.id, message=message, hash_message=str(random.getrandbits(128)))
+            session.add(new_message)
+            session.commit()
+        return 'Ok'
+
+    def get_history_message_user(self, login):
+        with self.Session() as session:
+            a = aliased(User)
+            result = session.query(a.login, User.login, HistoryMessageUsers.message, HistoryMessageUsers.create_at, HistoryMessageUsers.hash_message).\
+                join(a, a.id == HistoryMessageUsers.from_user_id).\
+                join(User, User.id == HistoryMessageUsers.to_user_id).\
+                filter(or_(User.login == login, a.login == login)).\
+                order_by(desc(HistoryMessageUsers.create_at)).\
+                all()
+            list_result = []
+            for i in result:
+                result_dict = {
+                    'message': i[2],
+                    'from_user': i[0],
+                    'to_user': i[1],
+                    'date': i[3].strftime('%d-%m-%Y %H-%M-%S'),
+                    'hash_message': i[4]
+                }
+                list_result.append(result_dict)
+            session.commit()
+        return list_result
 
     def add_contact(self, user_login, contact_login):
         with self.Session() as session:
@@ -82,8 +152,7 @@ class ServerStorage:
         with self.Session() as session:
             contact = session.query(User).filter(User.login == contact_login).first()
             user = session.query(User).filter(User.login == user_login).first()
-            result = session.query(Contacts).filter(Contacts.owner_id == user.id and
-                                                    Contacts.client_id == contact.id).first()
+            result = session.query(Contacts).filter(Contacts.owner_id == user.id and Contacts.client_id == contact.id).first()
             session.delete(result)
             session.commit()
         return 'Ok'
@@ -98,8 +167,9 @@ class ServerStorage:
 
     def check_authenticated(self, user_login, user_password):
         with self.Session() as session:
+            password = self.hash_password(user_password)
             user = session.query(User).filter(User.login == user_login).first()
-            if user and user.password == user_password:
+            if user and user.password == password:
                 return True
             else:
                 return False

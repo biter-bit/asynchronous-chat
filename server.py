@@ -18,7 +18,7 @@ app_log_chat = logging.getLogger('chat')
 def install_param_in_socket_server():
     """Устанавливаем введенные пользователем параметры подключения к серверу/создания сервера"""
     param = sys.argv
-    port = 10001
+    port = 10002
     addr = 'localhost'
     try:
         for i in param:
@@ -134,6 +134,19 @@ class Server(metaclass=ServerVerifier):
                                     byte_message = serialization_message(message_response)
                                     app_log_server.info(f'Пользователь {user} авторизирован!')
                                     socket_client_mes_name.send(byte_message)
+                                elif socket_client_message['action'] == 'registration' \
+                                        and message_response['response'] == 200:
+                                    byte_message = serialization_message(message_response)
+                                    app_log_server.info(f'Пользователь зарегестрирован!')
+                                    socket_client_mes_name.send(byte_message)
+                                    socket_client_mes_name.close()
+                                    self.clients.remove(socket_client_mes_name)
+                                    del self.name[socket_client_mes_name]
+                                elif socket_client_message['action'] == 'registration' \
+                                        and message_response['response'] == 400:
+                                    byte_message = serialization_message(message_response)
+                                    app_log_server.info(f'Пользователь не зарегестрирован!')
+                                    socket_client_mes_name.send(byte_message)
                                 elif socket_client_message['action'] == 'get_users' \
                                         and message_response['response'] == 200:
                                     user = socket_client_message['user']['user_login']
@@ -141,6 +154,11 @@ class Server(metaclass=ServerVerifier):
                                     byte_message = serialization_message(message_response)
                                     socket_client_mes_name.send(byte_message)
                                     app_log_server.info(f'Списко пользователей отправлен {user}')
+                                elif socket_client_message['action'] == 'get_statistics' \
+                                        and message_response['response'] == 200:
+                                    byte_message = serialization_message(message_response)
+                                    socket_client_mes_name.send(byte_message)
+                                    app_log_server.info(f'Статистика отправлена')
                                 elif socket_client_message['action'] == 'authorization' \
                                         and message_response['response'] == 401:
                                     user = socket_client_message['user']['user_login']
@@ -165,6 +183,15 @@ class Server(metaclass=ServerVerifier):
                                     byte_message = serialization_message(message_response)
                                     app_log_server.info(
                                         f'Контакты пользователя {user} готовы!')
+                                    socket_client_mes_name.send(byte_message)
+                                elif socket_client_message['action'] == 'get_messages_users' \
+                                        and message_response['response'] == 202:
+                                    user = socket_client_message['user']['user_login']
+                                    list_messages_user = self.database.get_history_message_user(user)
+                                    message_response['alert'] = list_messages_user
+                                    byte_message = serialization_message(message_response)
+                                    app_log_server.info(
+                                        f'Сообщения пользователя {user} готовы!')
                                     socket_client_mes_name.send(byte_message)
                                 elif socket_client_message['action'] == 'add_contact' \
                                         and message_response['response'] == 200:
@@ -194,17 +221,16 @@ class Server(metaclass=ServerVerifier):
                                 elif message_response == 'Error':
                                     msg = {
                                         "response": 200,
-                                        'user_name': socket_client_message['to'],
-                                        'alert': 'Данного пользователя нет в онлайн',
-                                        'from': socket_client_message['user']['user_login'],
+                                        'user_name': socket_client_message['user']['user_login'],
+                                        'alert': 'Сообщение доставлено',
+                                        'to': socket_client_message['to'],
                                         'message': socket_client_message['mess_text']
                                     }
                                     byte_message = serialization_message(msg)
                                     socket_client_mes_name.send(byte_message)
-                                    app_log_server.info('Сообщение принято. Ответ 200')
-                                    app_log_chat.info(
-                                        f"{message_response['user_name']} >> {message_response['message']}"
-                                    )
+                                    self.database.add_history_message(socket_client_message['user']['user_login'],
+                                                                      socket_client_message['to'],
+                                                                      socket_client_message['mess_text'])
                                 time.sleep(1)
                         except Exception:
                             app_log_server.info(f'Клиент {socket_client_mes_name.fileno()} {socket_client_mes_name.getpeername()} '
@@ -244,13 +270,21 @@ class Server(metaclass=ServerVerifier):
                     byte_message = serialization_message(msg_from)
                     sock.send(byte_message)
                     app_log_server.info('Сообщение принято. Ответ 200')
+                    database.add_history_message(user_login, message['to'], message['mess_text'])
                     return 'Ok'
             return 'Error'
 
+        # если администратор хочет получить информацию о пользователях
         elif 'action' in message and message['action'] == 'get_users' and 'time' in message and 'user' in message and \
                 'user_login' in message['user'] and database.check_login(user_login) and 'token' in message['user'] and \
                 database.check_authorized(user_login, message['user']['token']) and database.check_admin(user_login):
             return {'response': 200, 'user_name': user_login, 'alert': 'Список пользователей отправлен'}
+
+        # если пользователь хочет получить сообщения пользователя
+        elif 'action' in message and message['action'] == 'get_messages_users' and 'time' in message and \
+                'user' in message and 'user_login' in message['user'] and 'token' in message['user'] and \
+                database.check_authorized(user_login, message['user']['token']):
+            return {'response': 202, 'alert': None}
 
         # если пользователь отправил сообщение, но пользователь не авторизован
         elif 'action' in message and message['action'] == 'presence' and 'time' in message and 'user' in message and \
@@ -264,7 +298,45 @@ class Server(metaclass=ServerVerifier):
         elif 'action' in message and message['action'] == 'authorization' and 'time' in message and \
                 'user' in message and 'user_login' in message['user'] and 'user_password' in message['user'] and \
                 database.check_authenticated(user_login, message['user']['user_password']):
-            return {'response': 200, 'user_name': user_login, 'token': '', 'alert': 'Успешная авторизация'}
+            user_role = database.get_user_role(user_login)
+            if user_role == 'Администратор':
+                history_obj = database.get_history_users()
+                history_message = []
+            else:
+                history_obj = []
+                history_message = database.get_history_message_user(user_login)
+            return {'response': 200, 'user_name': user_login, 'token': '', 'alert': 'Успешная авторизация',
+                    'role': user_role, 'users': history_obj, 'users_message': history_message}
+
+        # если пользователь отправил сообщение для регистрации
+        elif 'action' in message and message['action'] == 'registration' and 'time' in message and \
+                'user' in message and 'user_login' in message['user'] and 'user_password' in message['user']:
+            password_hash = database.hash_password(message['user']['user_password'])
+            database.register(message['user']['user_login'], password_hash)
+            return {'response': 200, 'user_name': user_login, 'alert': 'Успешная регистрация'}
+
+        # если пользователь отправил сообщение для регистрации, но данные не валидны
+        # elif 'action' in message and message['action'] == 'registration' and 'time' in message and \
+        #         'user' in message and 'user_login' in message['user'] and 'user_password' in message['user']:
+        #     password_hash = database.hash_password(message['user']['password'])
+        #     database.register(message['user']['user_login'], password_hash)
+        #     return {'response': 400, 'user_name': user_login, 'alert': 'Регистрация не удалась'}
+
+        # если пользователь отправил сообщение на получение статистики определенного пользователя
+        elif 'action' in message and message['action'] == 'get_statistics' and 'time' in message and \
+                'user' in message and 'user_login' in message['user'] and 'token' in message['user'] and \
+                database.check_authorized(user_login, message['user']['token']):
+            user_role = database.get_user_role(user_login)
+            if user_role == 'Администратор':
+                history_obj = database.get_history_user(message['statistic'])
+            else:
+                history_obj = ''
+            return {'response': 200, 'user_name': user_login, 'token': '', 'alert': 'Статистика отправлена',
+                    'role': user_role,
+                    'user_history': {
+                        'create_at': history_obj.create_at.strftime("%Y-%m-%d %H:%M:%S"), 'login': history_obj.login, 'id': history_obj.id, 'ip': history_obj.ip_address
+                    }
+                }
 
         # если пользователь отправил сообщения для авторизации, но данные неверные
         elif 'action' in message and message['action'] == 'authorization' and 'time' in message and \

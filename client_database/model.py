@@ -12,7 +12,8 @@ class History(Base):
     to_user = Column(String)
     from_user = Column(String)
     message = Column(String)
-    create_at = Column(DateTime, default=datetime.datetime.utcnow)
+    create_at = Column(DateTime, default=datetime.datetime.now())
+    hash_message = Column(String)
 
 
 class Contacts(Base):
