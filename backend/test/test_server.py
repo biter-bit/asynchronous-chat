@@ -1,6 +1,6 @@
 import unittest
-from client import create_message
-from server import message_processing
+from frontend.client import create_message
+from backend.server import message_processing
 import datetime
 
 

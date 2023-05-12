@@ -1,10 +1,9 @@
-from utils import init_socket_tcp, deserialization_message, serialization_message, sys_param_reboot, decode_message, deserialization_message_list
+from utils import init_socket_tcp, deserialization_message, serialization_message, sys_param_reboot, \
+    deserialization_message_list
 import datetime, logging, sys, json, threading, time
 from metaclasses import ClientVerifier
-from client_database.crud import ClientStorage
-from client_database.model import History, Contacts
-from log.log_client import client_log_config
-from PyQt5.QtCore import QObject, pyqtSignal, pyqtSlot, QThread
+from frontend.client_database.crud import ClientStorage
+from PyQt5.QtCore import QObject, pyqtSignal, QThread
 
 app_log_client = logging.getLogger('client')
 
@@ -394,7 +393,7 @@ def install_param_in_socket_client():
     """Устанавливаем введенные пользователем параметры подключения к серверу/создания сервера"""
     param = sys.argv
     port = 10002
-    addr = 'localhost'
+    addr = '10.0.2.15'
     try:
         for i in param:
             if i == '-p':

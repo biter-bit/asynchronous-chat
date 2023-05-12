@@ -11,10 +11,10 @@ log_chat = logging.getLogger('chat')
 format_log = logging.Formatter("%(asctime)s %(levelname)s %(filename)s %(message)s")
 
 # создаем обработчик для логгера (куда будут записываться логи)
-fh = handlers.TimedRotatingFileHandler('log/log_server/server.log', when='D', interval=1)
+fh = handlers.TimedRotatingFileHandler('backend/log/log_server/server.log', when='D', interval=1)
 
 # создаем обработчик для логгера чата
-fh_chat = handlers.TimedRotatingFileHandler('log/log_server/server_chat.log', when='D', interval=1)
+fh_chat = handlers.TimedRotatingFileHandler('backend/log/log_server/server_chat.log', when='D', interval=1)
 
 # добавляем в обрабочик наш формат сообщений
 fh.setFormatter(format_log)

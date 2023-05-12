@@ -1,15 +1,10 @@
-import time
-
 from PyQt5 import QtCore, QtGui, QtWidgets
-from PyQt5.QtWidgets import QMainWindow, QStackedWidget, QWidget, QPushButton, QToolBar, QMessageBox, QTextEdit, QSizePolicy, QLineEdit, QMenu
+from PyQt5.QtWidgets import QMainWindow, QStackedWidget, QWidget, QPushButton, QToolBar, QMessageBox, QLineEdit
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QTextCursor, QTextImageFormat, QTextCharFormat, QImage, QColor, QPainter, QFont, QBrush, \
-    QTextOption, QTextFormat, QPixmap, QFontMetrics, QMouseEvent
 import sys
-from client import authorization_user_pyqt5, connect_server, init_database, start_thread_client_send, \
+from frontend.client import authorization_user_pyqt5, connect_server, init_database, start_thread_client_send, \
     start_thread_client_recipient, registration_user_pyqt5
 import json
-from variables import ROOT_DIR
 
 
 class MessageWidget(QWidget):
@@ -243,7 +238,7 @@ class ServerGUI(QMainWindow):
         self.resize(1227, 987)
         self.setMaximumSize(QtCore.QSize(1400, 1100))
         self.setWindowTitle("Асинхронный чат")
-        self.setStyleSheet("QMainWindow { background-image: url(/home/michael/python_work/asynchronous_chat_gb/img/view.jpg); }")
+        self.setStyleSheet("QMainWindow { background-image: url(/home/michael/python_work/asynchronous_chat_gb/frontend/img/view.jpg); }")
 
         # создаем основной виджет для наших 2 страниц: авторизация, приложение
         self.stack = QStackedWidget(self)
@@ -318,7 +313,7 @@ class ServerGUI(QMainWindow):
             for i in mes:
                 text = i['message']
                 self.user_widget.label2 = {i['from_user']: QtWidgets.QLabel()}
-                self.user_widget.label2[i['from_user']].installEventFilter(self.del_message_user)
+                # self.user_widget.label2[i['from_user']].installEventFilter(self.del_message_user)
                 self.user_widget.label2[i['from_user']].setText(i['from_user'] + ':<br>')
                 while True:
                     if len(text) // 30:

@@ -7,9 +7,7 @@ import time
 from descriptor import ServerCheckPort
 from metaclasses import ServerVerifier
 from utils import serialization_message, deserialization_message_list, sys_param_reboot
-from log.log_server import server_log_config
 from server_database.crud import ServerStorage
-from server_database.model import User
 
 app_log_server = logging.getLogger('server')
 app_log_chat = logging.getLogger('chat')
@@ -18,8 +16,8 @@ app_log_chat = logging.getLogger('chat')
 def install_param_in_socket_server():
     """Устанавливаем введенные пользователем параметры подключения к серверу/создания сервера"""
     param = sys.argv
-    port = 10002
-    addr = 'localhost'
+    port = 8000
+    addr = '10.0.2.15'
     try:
         for i in param:
             if i == '-p':
@@ -175,6 +173,14 @@ class Server(metaclass=ServerVerifier):
                                     socket_client_mes_name.close()
                                     self.clients.remove(socket_client_mes_name)
                                     del self.name[socket_client_mes_name]
+                                elif socket_client_message['action'] == 'get_target_contact' \
+                                        and message_response['response'] == 202:
+                                    contacts = self.database.get_target_contact(socket_client_message['search_contact'], message_response['user_name'])
+                                    message_response['alert'] = contacts
+                                    byte_message = serialization_message(message_response)
+                                    app_log_server.info(
+                                        f'Контакты готовы!')
+                                    socket_client_mes_name.send(byte_message)
                                 elif socket_client_message['action'] == 'get_contacts' \
                                         and message_response['response'] == 202:
                                     user = socket_client_message['user']['user_login']
@@ -355,6 +361,12 @@ class Server(metaclass=ServerVerifier):
                 'user' in message and 'user_login' in message['user'] and 'token' in message['user'] and not \
                 database.check_authorized(user_login, message['user']['token']):
             return {'response': 302, 'user_name': user_login, 'alert': 'Пользователь не авторизован'}
+
+        # если пользователь отправил сообщение на получение контакта
+        elif 'action' in message and message['action'] == 'get_target_contact' and 'time' in message and \
+             'user' in message and 'user_login' in message['user'] and 'token' in message['user'] and \
+             database.check_authorized(user_login, message['user']['token']):
+            return {'response': 202, 'alert': None, 'action': 'get_target_contact', 'user_name': user_login}
 
         # если пользователь отправил сообщение на получение контактов
         elif 'action' in message and message['action'] == 'get_contacts' and 'time' in message and \

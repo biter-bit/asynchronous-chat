@@ -5,14 +5,14 @@ from server_database.model import User, History, Contacts, Base, HistoryMessageU
 import sqlalchemy
 from variables import SQLALCHEMY_SERVER_DATABASE_URL
 from sqlalchemy.orm import sessionmaker, aliased
-import secrets, datetime, hashlib
-from sqlalchemy import or_, asc, desc
+import secrets, hashlib
+from sqlalchemy import or_, desc
 
 
 class ServerStorage:
     def __init__(self):
         # создаем движок и сессию для работы с базой данных
-        self.engine = sqlalchemy.create_engine(SQLALCHEMY_SERVER_DATABASE_URL)
+        self.engine = sqlalchemy.create_engine(SQLALCHEMY_SERVER_DATABASE_URL + 'example.db')
         self.Session = sessionmaker(bind=self.engine)
 
         # создаем обьект, который позволяет генерировать случайные данные
@@ -66,6 +66,13 @@ class ServerStorage:
     def hash_password(self, password):
         encode_password = password.encode('utf-8')
         result = hashlib.md5(encode_password).hexdigest()
+        return result
+
+    def get_target_contact(self, contact, login):
+        with self.Session() as session:
+            login_list = session.query(User.login).filter(User.login.like(contact + '%')).all()
+            result = [i[0] for i in login_list if i[0] != login]
+            session.commit()
         return result
 
     def get_contacts(self, user_login):

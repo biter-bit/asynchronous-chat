@@ -3,7 +3,7 @@ import socket
 import sys
 from utils import serialization_message, deserialization_message, \
     init_socket_tcp, sys_param_reboot
-from client import install_param_in_socket_client
+from frontend.client import install_param_in_socket_client
 
 
 class UnitClientServerTest(unittest.TestCase):
