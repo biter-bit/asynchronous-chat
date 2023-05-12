@@ -5,6 +5,7 @@ from client_database.model import History, Contacts, Base
 import sqlalchemy
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import or_
+from variables import SQLALCHEMY_SERVER_DATABASE_URL
 
 
 class ClientStorage:
@@ -13,7 +14,7 @@ class ClientStorage:
         self.user_login = user_login
 
         # создаем движок и сессию для работы с базой данных
-        url_database = f'sqlite:///user_{self.user_login}.db'
+        url_database = SQLALCHEMY_SERVER_DATABASE_URL + f'user_{self.user_login}.db'
         self.engine = sqlalchemy.create_engine(url_database)
         self.Session = sessionmaker(bind=self.engine)
 

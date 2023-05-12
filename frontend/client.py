@@ -8,6 +8,19 @@ from PyQt5.QtCore import QObject, pyqtSignal, QThread
 app_log_client = logging.getLogger('client')
 
 
+def create_message_get_target_contact(login, token, contact):
+    msg = {
+        'action': 'get_target_contact',
+        'time': datetime.datetime.now().strftime('%d.%m.%Y'),
+        'user': {
+            'user_login': login,
+            'token': token
+        },
+        'search_contact': contact
+    }
+    return msg
+
+
 def create_message_get_message_users(login, token):
     msg = {
         'action': 'get_messages_users',
@@ -18,6 +31,7 @@ def create_message_get_message_users(login, token):
         }
     }
     return msg
+
 
 def create_message_registration(login, password):
     msg = {
@@ -156,16 +170,21 @@ class ClientSender(threading.Thread, metaclass=ClientVerifier):
             byte_msg = serialization_message(msg)
             app_log_client.info('Сообщение сериализовано')
             self.sock.send(byte_msg)
+        elif message['request'] == '/get_target_contact':
+            msg = create_message_get_target_contact(self.account_name, self.token, message['args'])
+            app_log_client.info('Сообщение создано')
+            byte_msg = serialization_message(msg)
+            app_log_client.info('Сообщение сериализовано')
+            self.sock.send(byte_msg)
         # elif message == '/contacts':
         #     result = self.database.get_contacts()
         #     print(result)
-        # elif message == '/add_contact':
-        #     nickname = input('Никнейм пользователя, который хотите добавить в список контактов >> ')
-        #     msg = create_message_add_contact(nickname, self.account_name, self.token)
-        #     app_log_client.info('Сообщение создано')
-        #     byte_msg = serialization_message(msg)
-        #     app_log_client.info('Сообщение сериализовано')
-        #     self.sock.send(byte_msg)
+        elif message['request'] == '/add_contact':
+            msg = create_message_add_contact(message['args'], self.account_name, self.token)
+            app_log_client.info('Сообщение создано')
+            byte_msg = serialization_message(msg)
+            app_log_client.info('Сообщение сериализовано')
+            self.sock.send(byte_msg)
         # elif message == '/del_contact':
         #     nickname = input('Никнейм пользователя, который хотите удалить из контактов >> ')
         #     msg = create_message_del_contact(nickname, self.account_name, self.token)
@@ -219,6 +238,7 @@ class ClientRecipient(QObject, threading.Thread):
     create_users_signal = pyqtSignal(str)
     register_signal = pyqtSignal(str)
     message_user_received = pyqtSignal(str)
+    search_contact_signal = pyqtSignal(list)
 
     def __init__(self, sock, account_name, database):
         self.database = database
@@ -238,6 +258,8 @@ class ClientRecipient(QObject, threading.Thread):
                 print('Пока!')
                 self.message_received.emit('quit')
                 self.stop()
+            elif i['response'] == 202 and i['action'] == 'get_target_contact':
+                self.search_contact_signal.emit(i['alert'])
             elif 'user_name' in i and i['user_name'] != self.account_name:
                 self.database.add_message(i['user_name'], i['from'], i['alert'])
                 self.message_user_received.emit('delivered')
@@ -392,7 +414,7 @@ def authorization_user_pyqt5(server, login, password):
 def install_param_in_socket_client():
     """Устанавливаем введенные пользователем параметры подключения к серверу/создания сервера"""
     param = sys.argv
-    port = 10002
+    port = 8000
     addr = '10.0.2.15'
     try:
         for i in param:

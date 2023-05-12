@@ -1,10 +1,75 @@
 from PyQt5 import QtCore, QtGui, QtWidgets
-from PyQt5.QtWidgets import QMainWindow, QStackedWidget, QWidget, QPushButton, QToolBar, QMessageBox, QLineEdit
+from PyQt5.QtWidgets import QMainWindow, QStackedWidget, QWidget, QPushButton, QToolBar, QMessageBox, QLineEdit, QLabel, QAbstractItemView
 from PyQt5.QtCore import Qt
 import sys
 from frontend.client import authorization_user_pyqt5, connect_server, init_database, start_thread_client_send, \
     start_thread_client_recipient, registration_user_pyqt5
 import json
+
+
+class SearchContactWidget(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.resize(1052, 776)
+        self.setMinimumSize(QtCore.QSize(0, 0))
+        self.setMaximumSize(QtCore.QSize(1400, 1200))
+        self.setStyleSheet('QWidget { background-color: rgb(24,25,29); }')
+        self.horizontalLayout = QtWidgets.QHBoxLayout(self)
+
+        self.user_main = QtWidgets.QListWidget(self)
+        self.user_main.setFocusPolicy(Qt.NoFocus)
+        self.user_main.clearFocus()
+        self.user_main.setMaximumSize(QtCore.QSize(150, 16777215))
+        self.user_main.setStyleSheet("QListWidget {\n"
+                                     "    background-color: rgb(40,46,51);\n"
+                                     "    color: rgb(131,147,163);\n"
+                                     "}"
+                                     "QListWidget::item { padding: 10px }")
+
+        self.item_my_page = QtWidgets.QListWidgetItem()
+        self.item_my_page.setTextAlignment(Qt.AlignCenter)
+        self.item_my_page.setText('Моя страница')
+        self.user_main.addItem(self.item_my_page)
+
+        self.item_search = QtWidgets.QListWidgetItem()
+        self.item_search.setTextAlignment(Qt.AlignCenter)
+        self.item_search.setText('Поиск')
+        self.user_main.addItem(self.item_search)
+
+        self.item_logout = QtWidgets.QListWidgetItem()
+        self.item_logout.setTextAlignment(Qt.AlignCenter)
+        self.item_logout.setText('Выход')
+        self.user_main.addItem(self.item_logout)
+
+        self.horizontalLayout.addWidget(self.user_main)
+
+        self.search_widget = QWidget(self)
+
+        self.verticalLayout = QtWidgets.QVBoxLayout(self.search_widget)
+        self.list_contacts = QtWidgets.QListWidget(self)
+        self.list_contacts.setMaximumSize(QtCore.QSize(16777215, 16777215))
+        self.list_contacts.setStyleSheet("QListWidget {\n"
+                                     "    background-color: rgb(40,46,51);\n"
+                                     "    color: rgb(131,147,163);\n"
+                                     "}"
+                                     "QListWidget::item { padding: 10px } ")
+
+        self.item_my_page = QtWidgets.QListWidgetItem()
+        self.item_my_page.setTextAlignment(Qt.AlignCenter)
+        self.user_main.addItem(self.item_my_page)
+        self.verticalLayout.addWidget(self.list_contacts)
+
+        self.send_line = QtWidgets.QLineEdit()
+        self.send_line.setStyleSheet("background-color: rgb(40,46,51); color: white")
+        self.send_line.setPlaceholderText('Имя пользователя')
+        self.verticalLayout.addWidget(self.send_line)
+
+        self.send_button = QtWidgets.QPushButton()
+        self.send_button.setStyleSheet("QPushButton { background-color: rgb(40,46,51); color: rgb(255,255,255) }")
+        self.send_button.setText("Найти")
+        self.verticalLayout.addWidget(self.send_button)
+
+        self.horizontalLayout.addWidget(self.search_widget)
 
 
 class MessageWidget(QWidget):
@@ -18,6 +83,8 @@ class MessageWidget(QWidget):
         self.setStyleSheet('QWidget { background-color: rgb(24,25,29); }')
 
         self.user_main = QtWidgets.QListWidget(self)
+        self.user_main.setFocusPolicy(Qt.NoFocus)
+        self.user_main.clearFocus()
         self.user_main.setMaximumSize(QtCore.QSize(150, 16777215))
         self.user_main.setStyleSheet("QListWidget {\n"
                                      "    background-color: rgb(40,46,51);\n"
@@ -257,6 +324,10 @@ class ServerGUI(QMainWindow):
         self.user_widget = MessageWidget(self.stack)
         self.stack.addWidget(self.user_widget)
 
+        # создаем обьект виджета поиска контактов и добавления их в список контактов
+        self.search_contact_widget = SearchContactWidget(self.stack)
+        self.stack.addWidget(self.search_contact_widget)
+
         # создаем центральный виджет, в котором будут располагаться все остальные виджиты
         self.centralwidget = QtWidgets.QWidget(self.stack)
         # создаем виджет, который будет расставлять другие обьекты по горизонтали и сразу добавляем его к центральному
@@ -291,7 +362,16 @@ class ServerGUI(QMainWindow):
         # вызываем метод, который будет выходить из сервера на страницу авторизации
         self.button_logout.clicked.connect(lambda: self.send_message({'request': '/quit'}))
 
+        self.search_contact_widget.send_button.clicked.connect(lambda: self.send_message({
+            'request': '/get_target_contact',
+            'args': self.search_contact_widget.send_line.text()
+        }))
+
+        # переключение вкладок в панели пользователя
         self.user_widget.user_main.itemClicked.connect(self.main_menu_user)
+
+        # переключение вкладок в панели поиска контактов
+        self.search_contact_widget.user_main.itemClicked.connect(self.main_menu_user)
 
         # соединяем событие нажатия на кнопку регистрации и слот регистрации
         self.login_widget.pushButton_3.clicked.connect(self.registration)
@@ -299,10 +379,17 @@ class ServerGUI(QMainWindow):
         self.register_widget.pushButton_send.clicked.connect(self.register_success)
 
         # выводим историю сообщений пользователя
-        self.user_widget.users_list.itemClicked.connect(self.display_messages)
+        self.user_widget.users_list.itemDoubleClicked.connect(self.display_messages)
 
         # отправляем сообщение пользователю
         self.user_widget.send_button.clicked.connect(self.send_message_user)
+
+    def add_contact(self, item):
+        msg = {
+            'request': '/add_contact',
+            'args': item
+        }
+        self.send_message(msg)
 
     def display_messages(self, item):
         self.to_user = item
@@ -334,6 +421,27 @@ class ServerGUI(QMainWindow):
         scroll_bar = self.user_widget.scroll_area.verticalScrollBar()
         scroll_bar.rangeChanged.connect(lambda: scroll_bar.setValue(scroll_bar.maximum()))
 
+    def output_found_contacts(self, item):
+        self.search_contact_widget.list_contacts.clear()
+        for i in item:
+            self.search_contact_widget.widget = QWidget()
+            self.search_contact_widget.widget.setStyleSheet("background-color: transparent;")
+            self.search_contact_widget.layout = QtWidgets.QHBoxLayout()
+            self.search_contact_widget.label = QLabel(i)
+            self.search_contact_widget.label.setStyleSheet("background-color: rgb(40,46,51); color: white")
+            self.search_contact_widget.layout.addWidget(self.search_contact_widget.label)
+            self.search_contact_widget.button = QPushButton('Добавить')
+            self.search_contact_widget.button.setStyleSheet("QPushButton { background-color: rgb(40,46,51); color: rgb(255,255,255) }")
+            self.search_contact_widget.layout.addWidget(self.search_contact_widget.button)
+            self.search_contact_widget.layout.setContentsMargins(0, 0, 0, 0)
+            self.search_contact_widget.widget.setLayout(self.search_contact_widget.layout)
+
+            self.search_contact_widget.item = QtWidgets.QListWidgetItem()
+            self.search_contact_widget.list_contacts.addItem(self.search_contact_widget.item)
+            self.search_contact_widget.list_contacts.setItemWidget(self.search_contact_widget.item, self.search_contact_widget.widget)
+
+            self.search_contact_widget.button.clicked.connect(lambda state, label=self.search_contact_widget.label.text(): self.add_contact(label))
+
     def send_message_user(self):
         mes = {
             'request': '/message',
@@ -348,9 +456,9 @@ class ServerGUI(QMainWindow):
         # menu = QMenu(self.user_widget.label2[i['from_user']].cli)
         pass
 
-
     def authorization(self):
         self.stack.setCurrentWidget(self.login_widget)
+
         self.login_widget.lineEdit.setText("")
         self.login_widget.lineEdit_2.setText("")
         self.login_widget.lineEdit.setFocus()
@@ -363,10 +471,26 @@ class ServerGUI(QMainWindow):
 
     def main_menu_user(self, item):
         if item.text() == 'Моя страница':
-            pass
+            self.user_widget.users_list.clear()
+            for i in self.user_widget.message_widget.findChildren(QtWidgets.QLabel):
+                i.deleteLater()
+            for i in self.database.get_contacts():
+                item = QtWidgets.QListWidgetItem()
+                item.setText(str(i))
+                item.setTextAlignment(Qt.AlignCenter)
+                self.user_widget.users_list.addItem(item)
+            self.search_contact_widget.user_main.clearSelection()
+            self.user_widget.user_main.clearSelection()
+            self.stack.setCurrentWidget(self.user_widget)
         elif item.text() == 'Поиск':
-            pass
+            self.search_contact_widget.list_contacts.clear()
+            self.search_contact_widget.send_line.clear()
+            self.search_contact_widget.user_main.clearSelection()
+            self.user_widget.user_main.clearSelection()
+            self.stack.setCurrentWidget(self.search_contact_widget)
         elif item.text() == 'Выход':
+            self.search_contact_widget.user_main.clearSelection()
+            self.user_widget.user_main.clearSelection()
             self.send_message({'request': '/quit'})
 
     def handle_item_clicked(self, item):
@@ -409,12 +533,15 @@ class ServerGUI(QMainWindow):
             self.database = init_database(result, self.server)
             self.stack.setCurrentWidget(self.user_widget)
             self.user_widget.users_list.clear()
+            self.search_contact_widget.list_contacts.clear()
+            self.search_contact_widget.send_line.clear()
             for i in self.user_widget.message_widget.findChildren(QtWidgets.QLabel):
                 i.deleteLater()
             self.client_recipient = start_thread_client_recipient(result, self.server, self.database)
             self.client_sender = start_thread_client_send(result, self.server, self.database)
             self.client_recipient.message_received.connect(self.logout)
             self.client_recipient.message_user_received.connect(lambda: self.display_messages(self.to_user))
+            self.client_recipient.search_contact_signal.connect(lambda item: self.output_found_contacts(item))
             for i in self.database.get_contacts():
                 item = QtWidgets.QListWidgetItem()
                 item.setText(str(i))
