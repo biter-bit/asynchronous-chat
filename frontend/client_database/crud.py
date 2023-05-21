@@ -65,9 +65,9 @@ class ClientStorage:
             session.commit()
         return 'Ok'
 
-    def add_message(self, from_user, to_user, message):
+    def add_message(self, from_user, to_user, message, hash_mes):
         with self.Session() as session:
-            result = History(to_user=to_user, from_user=from_user, message=message)
+            result = History(to_user=to_user, from_user=from_user, message=message, hash_message=hash_mes)
             session.add(result)
             session.commit()
         return 'Ok'

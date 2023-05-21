@@ -119,10 +119,11 @@ class ServerStorage:
         with self.Session() as session:
             from_user_login = session.query(User).filter(User.login == from_user).first()
             to_user_login = session.query(User).filter(User.login == to_user).first()
-            new_message = HistoryMessageUsers(from_user_id=from_user_login.id, to_user_id=to_user_login.id, message=message, hash_message=str(random.getrandbits(128)))
+            hash_message = str(random.getrandbits(128))
+            new_message = HistoryMessageUsers(from_user_id=from_user_login.id, to_user_id=to_user_login.id, message=message, hash_message=hash_message)
             session.add(new_message)
             session.commit()
-        return 'Ok'
+        return hash_message
 
     def get_history_message_user(self, login):
         with self.Session() as session:
@@ -188,6 +189,15 @@ class ServerStorage:
                 return False
             else:
                 return True
+
+    # def check_password(self, user_password):
+    #     with self.Session() as session:
+    #         password = self.hash_password(user_password)
+    #         user = session.query(User).filter(User.password == user_password, User.login == ).first()
+    #         if user is None:
+    #             return False
+    #         else:
+    #             return True
 
     def check_admin(self, user_login):
         with self.Session() as session:

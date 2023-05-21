@@ -1,6 +1,28 @@
 import sys, json, socket, hashlib, logging, inspect
 
 
+app_log_server = logging.getLogger('server')
+
+def install_param_in_socket_server():
+    """Устанавливаем введенные пользователем параметры подключения к серверу/создания сервера"""
+    param = sys.argv
+    port = 8000
+    addr = 'localhost'
+    try:
+        for i in param:
+            if i == '-p':
+                port = int(param[param.index(i) + 1])
+            if i == '-a':
+                addr = param[param.index(i) + 1]
+        sys_param_reboot()
+        app_log_server.info('Параметры сокета успешно заданы')
+        return addr, port
+    except Exception as error:
+        app_log_server.error('Параметр задан неверно')
+        name_error = 'Ошибка'
+        return error, name_error
+
+
 def serialization_message(message):
     """Сериализуем сообщение"""
     js_msg = json.dumps(message)

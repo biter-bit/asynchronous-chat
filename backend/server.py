@@ -1,50 +1,21 @@
-import logging
-import select
-import socket
-import sys
-import time
-
+import logging, select, socket, time
 from descriptor import ServerCheckPort
 from metaclasses import ServerVerifier
-from utils import serialization_message, deserialization_message_list, sys_param_reboot
+from utils import serialization_message, deserialization_message_list, install_param_in_socket_server
 from server_database.crud import ServerStorage
 
-app_log_server = logging.getLogger('server')
 app_log_chat = logging.getLogger('chat')
-
-
-def install_param_in_socket_server():
-    """Устанавливаем введенные пользователем параметры подключения к серверу/создания сервера"""
-    param = sys.argv
-    port = 8000
-    addr = '10.0.2.15'
-    try:
-        for i in param:
-            if i == '-p':
-                port = int(param[param.index(i) + 1])
-            if i == '-a':
-                addr = param[param.index(i) + 1]
-        sys_param_reboot()
-        app_log_server.info('Параметры сокета успешно заданы')
-        return addr, port
-    except Exception as error:
-        app_log_server.error('Параметр задан неверно')
-        name_error = 'Ошибка'
-        return error, name_error
+app_log_server = logging.getLogger('server')
 
 
 class Server(metaclass=ServerVerifier):
     port = ServerCheckPort()
 
     def __init__(self, addr, port, wait, database):
-        self.sock = None
         self.addr = addr
         self.port = port
         self.clients = []
-
-        # создаем обьект для работы с б.д.
         self.database = database
-
         self.r = []
         self.w = []
         self.e = []
@@ -98,12 +69,25 @@ class Server(metaclass=ServerVerifier):
                     try:
                         data = i.recv(4096)
                         decode_data_dict = deserialization_message_list(data)
-                        # if i in self.name:
-                        #     raise Exception
                         for el in decode_data_dict:
+                            if el['action'] == 'authorization' and not self.database.check_authenticated(
+                                        el['user']['user_login'], el['user']['user_password']):
+                                mes = {
+                                    'role': 'Неверный логин или пароль',
+                                    'response': 401
+                                }
+                                result = serialization_message(mes)
+                                i.send(result)
+                                raise Exception('Неверный логин или пароль')
                             for sock_name in self.name:
                                 if self.name[sock_name] == el['user']['user_login'] and el['action'] == 'authorization':
-                                    raise Exception
+                                    mes = {
+                                        'role': 'Нет доступа',
+                                        'response': 401
+                                    }
+                                    result = serialization_message(mes)
+                                    i.send(result)
+                                    raise Exception('Данный пользователь уже авторизирован')
                             if el['user']['user_login'] not in self.name.values():
                                 self.name[i] = el['user']['user_login']
                         self.message_client[i] = decode_data_dict
@@ -132,6 +116,12 @@ class Server(metaclass=ServerVerifier):
                                     byte_message = serialization_message(message_response)
                                     app_log_server.info(f'Пользователь {user} авторизирован!')
                                     socket_client_mes_name.send(byte_message)
+                                elif socket_client_message['action'] == 'authorization' \
+                                        and message_response['response'] == 401:
+                                    user = socket_client_message['user']['user_login']
+                                    byte_message = serialization_message(message_response)
+                                    app_log_server.info(f'Пользователь {user} не авторизирован!')
+                                    socket_client_mes_name.send(byte_message)
                                 elif socket_client_message['action'] == 'registration' \
                                         and message_response['response'] == 200:
                                     byte_message = serialization_message(message_response)
@@ -157,12 +147,6 @@ class Server(metaclass=ServerVerifier):
                                     byte_message = serialization_message(message_response)
                                     socket_client_mes_name.send(byte_message)
                                     app_log_server.info(f'Статистика отправлена')
-                                elif socket_client_message['action'] == 'authorization' \
-                                        and message_response['response'] == 401:
-                                    user = socket_client_message['user']['user_login']
-                                    byte_message = serialization_message(message_response)
-                                    app_log_server.info(f'Пользователь {user} не авторизирован!')
-                                    socket_client_mes_name.send(byte_message)
                                 elif socket_client_message['action'] == 'quit' \
                                         and message_response['response'] == 200:
                                     user = socket_client_message['user']['user_login']
@@ -181,6 +165,16 @@ class Server(metaclass=ServerVerifier):
                                     app_log_server.info(
                                         f'Контакты готовы!')
                                     socket_client_mes_name.send(byte_message)
+                                elif socket_client_message['action'] == 'get_messages_users' \
+                                        and message_response['response'] == 202:
+                                    user = socket_client_message['user']['user_login']
+                                    list_messages_user = self.database.get_history_message_user(user)
+                                    message_response['alert'] = list_messages_user
+                                    message_response['message'] = 'Сообщения отправлены'
+                                    byte_message = serialization_message(message_response)
+                                    app_log_server.info(
+                                        f'Сообщения пользователя {user} готовы!')
+                                    socket_client_mes_name.send(byte_message)
                                 elif socket_client_message['action'] == 'get_contacts' \
                                         and message_response['response'] == 202:
                                     user = socket_client_message['user']['user_login']
@@ -189,15 +183,6 @@ class Server(metaclass=ServerVerifier):
                                     byte_message = serialization_message(message_response)
                                     app_log_server.info(
                                         f'Контакты пользователя {user} готовы!')
-                                    socket_client_mes_name.send(byte_message)
-                                elif socket_client_message['action'] == 'get_messages_users' \
-                                        and message_response['response'] == 202:
-                                    user = socket_client_message['user']['user_login']
-                                    list_messages_user = self.database.get_history_message_user(user)
-                                    message_response['alert'] = list_messages_user
-                                    byte_message = serialization_message(message_response)
-                                    app_log_server.info(
-                                        f'Сообщения пользователя {user} готовы!')
                                     socket_client_mes_name.send(byte_message)
                                 elif socket_client_message['action'] == 'add_contact' \
                                         and message_response['response'] == 200:
@@ -208,19 +193,7 @@ class Server(metaclass=ServerVerifier):
                                     app_log_server.info(
                                         f'Добавлен новый контакт пользователю {user}')
                                     socket_client_mes_name.send(byte_message)
-                                elif socket_client_message['action'] == 'del_contact' \
-                                        and message_response['response'] == 200:
-                                    user = socket_client_message['user']['user_login']
-                                    contact = socket_client_message['user_id']
-                                    self.database.del_contact(user, contact)
-                                    byte_message = serialization_message(message_response)
-                                    app_log_server.info(f'Удален контакт пользователю {user}')
-                                    socket_client_mes_name.send(byte_message)
                                 elif socket_client_message['action'] == 'add_contact' \
-                                        and message_response['response'] == 400:
-                                    byte_message = serialization_message(message_response)
-                                    socket_client_mes_name.send(byte_message)
-                                elif socket_client_message['action'] == 'del_contact' \
                                         and message_response['response'] == 400:
                                     byte_message = serialization_message(message_response)
                                     socket_client_mes_name.send(byte_message)
@@ -237,7 +210,18 @@ class Server(metaclass=ServerVerifier):
                                     self.database.add_history_message(socket_client_message['user']['user_login'],
                                                                       socket_client_message['to'],
                                                                       socket_client_message['mess_text'])
-                                time.sleep(1)
+                                # elif socket_client_message['action'] == 'del_contact' \
+                                #         and message_response['response'] == 200:
+                                #     user = socket_client_message['user']['user_login']
+                                #     contact = socket_client_message['user_id']
+                                #     self.database.del_contact(user, contact)
+                                #     byte_message = serialization_message(message_response)
+                                #     app_log_server.info(f'Удален контакт пользователю {user}')
+                                #     socket_client_mes_name.send(byte_message)
+                                # elif socket_client_message['action'] == 'del_contact' \
+                                #         and message_response['response'] == 400:
+                                #     byte_message = serialization_message(message_response)
+                                #     socket_client_mes_name.send(byte_message)
                         except Exception:
                             app_log_server.info(f'Клиент {socket_client_mes_name.fileno()} {socket_client_mes_name.getpeername()} '
                                                 f'отключился (отправка)')
@@ -256,28 +240,31 @@ class Server(metaclass=ServerVerifier):
                 database.check_authorized(user_login, message['user']['token']) and 'mess_text' in message and \
                 'to' in message:
 
+            msg_to = {
+                "response": 200,
+                'user_name': user_login,
+                'alert': message['mess_text'],
+                'from': message['to']
+            }
+            msg_from = {
+                "response": 200,
+                'user_name': user_login,
+                'to': message['to'],
+                'alert': 'Сообщение доставлено',
+                'message': message['mess_text']
+            }
+
             for key, value in self.name.items():
+                hash_mes = database.add_history_message(user_login, message['to'], message['mess_text'])
+                msg_from['hash_message'] = hash_mes
+                byte_message = serialization_message(msg_from)
+                sock.send(byte_message)
                 if value == message['to'] and database.check_login(message['to']):
-                    msg_to = {
-                        "response": 200,
-                        'user_name': user_login,
-                        'alert': message['mess_text'],
-                        'from': message['to']
-                    }
-                    msg_from = {
-                        "response": 200,
-                        'user_name': user_login,
-                        'to': message['to'],
-                        'alert': 'Сообщение доставлено',
-                        'message': message['mess_text']
-                    }
+                    msg_to['hash_message'] = hash_mes
                     byte_message = serialization_message(msg_to)
                     key.send(byte_message)
-                    byte_message = serialization_message(msg_from)
-                    sock.send(byte_message)
-                    app_log_server.info('Сообщение принято. Ответ 200')
-                    database.add_history_message(user_login, message['to'], message['mess_text'])
-                    return 'Ok'
+                return 'Ok'
+
             return 'Error'
 
         # если администратор хочет получить информацию о пользователях
@@ -395,20 +382,20 @@ class Server(metaclass=ServerVerifier):
                 message['user_id'] and not database.check_login(message['user_id']):
             return {'response': 400, 'user_name': user_login, 'alert': 'Для добавления пользователь должен быть в базе'}
 
-        # если пользователь отправил сообщение на удаление контакта
-        elif 'action' in message and message['action'] == 'del_contact' and 'time' in message and \
-                'user' in message and 'user_login' in message['user'] and 'token' in message['user'] and \
-                database.check_authorized(user_login, message['user']['token']) and 'user_id' in message and \
-                message['user_id'] and database.check_login(message['user_id']):
-            return {'response': 200, 'user_name': user_login, 'to_user': message['user_id'],
-                    'alert': f'Пользователь удален из контактов'}
+        # # если пользователь отправил сообщение на удаление контакта
+        # elif 'action' in message and message['action'] == 'del_contact' and 'time' in message and \
+        #         'user' in message and 'user_login' in message['user'] and 'token' in message['user'] and \
+        #         database.check_authorized(user_login, message['user']['token']) and 'user_id' in message and \
+        #         message['user_id'] and database.check_login(message['user_id']):
+        #     return {'response': 200, 'user_name': user_login, 'to_user': message['user_id'],
+        #             'alert': f'Пользователь удален из контактов'}
 
-        # если пользователь отправил сообщение на удаление контакта, но контакта в базе нет
-        elif 'action' in message and message['action'] == 'del_contact' and 'time' in message and \
-                'user' in message and 'user_login' in message['user'] and 'token' in message['user'] and \
-                database.check_authorized(user_login, message['user']['token']) and 'user_id' in message and \
-                message['user_id'] and not database.check_login(message['user_id']):
-            return {'response': 400, 'user_name': user_login, 'alert': 'Для удаления пользователь должен быть в базе'}
+        # # если пользователь отправил сообщение на удаление контакта, но контакта в базе нет
+        # elif 'action' in message and message['action'] == 'del_contact' and 'time' in message and \
+        #         'user' in message and 'user_login' in message['user'] and 'token' in message['user'] and \
+        #         database.check_authorized(user_login, message['user']['token']) and 'user_id' in message and \
+        #         message['user_id'] and not database.check_login(message['user_id']):
+        #     return {'response': 400, 'user_name': user_login, 'alert': 'Для удаления пользователь должен быть в базе'}
 
         # любое другое сообщение
         else:
@@ -419,7 +406,6 @@ class Server(metaclass=ServerVerifier):
 
 def main():
     addr, port = install_param_in_socket_server()
-
     obj_server = Server(addr, port, 10, ServerStorage())
     obj_server.get_and_send_message()
 
