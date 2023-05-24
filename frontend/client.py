@@ -1,15 +1,16 @@
 from utils import init_socket_tcp, deserialization_message, serialization_message, deserialization_message_list, \
-    install_param_in_socket_client
+    install_param_in_socket_client, get_public_key, encrypted_message, generic_key_client, decrypted_message
 import datetime, logging, json, threading
 from metaclasses import ClientVerifier
 from client_database.crud import ClientStorage
 from PyQt5.QtCore import QObject, pyqtSignal
+from Crypto.Cipher import PKCS1_OAEP
 
 app_log_client = logging.getLogger('client')
 
 
 def message_template(login='', password='', token='', action='', message='', to='', add_contact='',
-                     statistic='', search_contact=''):
+                     statistic='', search_contact='', public_key=''):
     msg = {
         'action': action,
         'time': datetime.datetime.now().strftime('%d.%m.%Y'),
@@ -22,7 +23,8 @@ def message_template(login='', password='', token='', action='', message='', to=
         'to': to,
         'user_id': add_contact,
         'statistic': statistic,
-        'search_contact': search_contact
+        'search_contact': search_contact,
+        'public_key': public_key
     }
     return msg
 
@@ -118,11 +120,6 @@ class ClientRecipient(QObject, threading.Thread):
                 app_log_client.info(f'Пользователь {self.account_name} вышел')
                 self.message_received.emit('quit')
                 self.stop()
-            elif i['response'] == 202 and i['message'] == 'Сообщения отправлены':
-                app_log_client.info('Ответ получен. %s %s', i['response'], i['alert'])
-                self.database.add_messages(i['alert'])
-            elif i['response'] == 202 and i['action'] == 'get_target_contact':
-                self.search_contact_signal.emit(i['alert'])
             elif 'user_name' in i and i['user_name'] != self.account_name:
                 self.database.add_message(i['user_name'], i['from'], i['alert'], i['hash_message'])
                 self.message_user_received.emit(i['user_name'])
@@ -139,6 +136,11 @@ class ClientRecipient(QObject, threading.Thread):
             elif i['response'] == 200 and i['alert'] == 'Успешная регистрация':
                 print(i['alert'])
                 self.register_signal.emit('Ok')
+            elif i['response'] == 202 and i['alert'] == 'Сообщения отправлены':
+                app_log_client.info('Ответ получен. %s %s', i['response'], i['message'])
+                self.database.add_messages(i['message'])
+            elif i['response'] == 202 and i['action'] == 'get_target_contact':
+                self.search_contact_signal.emit(i['alert'])
             # elif i['response'] == 400 and i['alert'] == 'Для добавления пользователь должен быть в базе':
             #     print(i['alert'])
             # elif i['response'] == 400 and i['alert'] == 'Для удаления пользователь должен быть в базе':
@@ -176,19 +178,24 @@ def authorization(server, login, password):
         'token': ''
     }
     try:
+        PRIVAT_KEY_CLIENT, PUBLIC_KEY_CLIENT = generic_key_client()
+        mes = message_template(action='get_public_key', public_key=PUBLIC_KEY_CLIENT.decode())
+        public_key_server = get_public_key(server, mes)
+
         result_data['name_account'] = login
         result_data['password'] = password
 
         # создаем сообщение и отправляем серверу
         msg = message_template(action='authorization', login=result_data['name_account'],
-                               password=result_data['password'])
-        msg_json = serialization_message(msg)
-        server.send(msg_json)
+                               password=result_data['password'], public_key=PUBLIC_KEY_CLIENT.decode())
+        encode_msg = serialization_message(msg)
+        encrypted_mes = encrypted_message(encode_msg, public_key_server)
+        server.send(encrypted_mes)
 
         # получаем сообщение сервера
         data = server.recv(4096)
-
-        message = deserialization_message(data)
+        decrypt_data = decrypted_message(data[10:], PRIVAT_KEY_CLIENT)
+        message = deserialization_message(decrypt_data)
         if message['response'] == 401 and message['role'] == 'Нет доступа':
             result_data['role'] = 'Нет доступа'
             print('Этот пользователь уже в системе.')
@@ -274,9 +281,9 @@ def init_database(data, server):
     server_data = server.recv(4096)
     list_message = deserialization_message_list(server_data)
     for i in list_message:
-        app_log_client.info('Ответ получен. %s %s', i['response'], i['alert'])
+        app_log_client.info('Ответ получен. %s %s', i['response'], i['message'])
         if i['response'] == 202:
-            database.add_messages(i['alert'])
+            database.add_messages(i['message'])
 
     return database
 

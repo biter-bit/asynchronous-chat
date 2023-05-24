@@ -5,7 +5,7 @@ from server_database.model import User, History, Contacts, Base, HistoryMessageU
 import sqlalchemy
 from variables import SQLALCHEMY_SERVER_DATABASE_URL
 from sqlalchemy.orm import sessionmaker, aliased
-import secrets, hashlib
+import secrets, hashlib, uuid
 from sqlalchemy import or_, desc
 
 
@@ -58,10 +58,28 @@ class ServerStorage:
 
     def register(self, login, password):
         with self.Session() as session:
-            user = User(login=login, password=password, role='Пользователь')
-            session.add(user)
-            session.commit()
-        return 'Ok'
+            if self.validator_unique_user(login) and self.validator_mail(login):
+                salt = uuid.uuid4().hex
+                hash_password = self.hash_password(salt) + password
+                user = User(login=login, password=hash_password, role='Пользователь', salt=salt)
+                session.add(user)
+                session.commit()
+                return 'Ok'
+        return 'Not valid'
+
+    def validator_unique_user(self, login):
+        with self.Session() as session:
+            login_list = session.query(User.login).filter(User.login == login).all()
+            result = [i[0] for i in login_list if i[0] == login]
+            if result:
+                return False
+        return True
+
+    def validator_mail(self, login):
+        # сделать с помощью регулярок
+        if '@.' not in login and len(login) < 5 or len(login) > 16:
+            return False
+        return True
 
     def hash_password(self, password):
         encode_password = password.encode('utf-8')
@@ -175,8 +193,8 @@ class ServerStorage:
 
     def check_authenticated(self, user_login, user_password):
         with self.Session() as session:
-            password = self.hash_password(user_password)
             user = session.query(User).filter(User.login == user_login).first()
+            password = self.hash_password(user.salt) + self.hash_password(user_password)
             if user and user.password == password:
                 return True
             else:

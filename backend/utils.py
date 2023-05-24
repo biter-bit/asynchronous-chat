@@ -1,12 +1,25 @@
 import sys, json, socket, hashlib, logging, inspect
-
+from Crypto.Cipher import PKCS1_OAEP
+from Crypto.PublicKey import RSA
 
 app_log_server = logging.getLogger('server')
+
+def encrypted_message(msg, public_key):
+    resipient_key = RSA.import_key(public_key)
+    cipher = PKCS1_OAEP.new(resipient_key)
+    result = b'ENCRYPTED:' + cipher.encrypt(msg)
+    return result
+
+def decrypted_message(msg, privat_key):
+    resipient_key = RSA.import_key(privat_key)
+    cipher = PKCS1_OAEP.new(resipient_key)
+    result = cipher.decrypt(msg)
+    return result
 
 def install_param_in_socket_server():
     """Устанавливаем введенные пользователем параметры подключения к серверу/создания сервера"""
     param = sys.argv
-    port = 8000
+    port = 8001
     addr = 'localhost'
     try:
         for i in param:
@@ -70,7 +83,7 @@ def deserialization_message_list(message):
     d_rep = replace_data_message(d_mes)
     result = d_rep.split(' , ')
     for i in result:
-        deserialize_list.append(json.loads(i))
+        deserialize_list.append(json.loads(i, strict=False))
     return deserialize_list
 
 

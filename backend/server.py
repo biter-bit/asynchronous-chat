@@ -1,8 +1,11 @@
 import logging, select, socket, time
 from descriptor import ServerCheckPort
 from metaclasses import ServerVerifier
-from utils import serialization_message, deserialization_message_list, install_param_in_socket_server
+from utils import serialization_message, deserialization_message_list, install_param_in_socket_server, \
+    decrypted_message, encrypted_message
 from server_database.crud import ServerStorage
+from Crypto.PublicKey import RSA
+from Crypto.Cipher import PKCS1_OAEP
 
 app_log_chat = logging.getLogger('chat')
 app_log_server = logging.getLogger('server')
@@ -26,16 +29,24 @@ class Server(metaclass=ServerVerifier):
         self.name = {}
 
     def socket_init(self):
-        transport = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         app_log_server.info('Сокет инициализирован')
-        transport.bind((self.addr, self.port))
-        transport.settimeout(1)
-        self.sock = transport
+        self.sock.bind((self.addr, self.port))
+        self.sock.settimeout(1)
         self.sock.listen()
+
+    def generic_key_server(self):
+        key = RSA.generate(8192)
+        PRIVAT_KEY = key.export_key()
+        PUBLIC_KEY = key.public_key().export_key()
+        return PRIVAT_KEY, PUBLIC_KEY
 
     def get_and_send_message(self):
         # инициализируем сокет
         self.socket_init()
+
+        # генерируем ключи для сервера
+        PRIVAT_KEY_SERVER, PUBLIC_KEY_SERVER = self.generic_key_server()
 
         while True:
             try:
@@ -67,8 +78,13 @@ class Server(metaclass=ServerVerifier):
                 # берем сокет каждого клиента и читаем сообщение, которые он отправил
                 for i in self.r:
                     try:
+                        # !!! отправить ответ на авторизацию в зашифрованом виде !!!!
                         data = i.recv(4096)
-                        decode_data_dict = deserialization_message_list(data)
+                        if data[:10] == b'ENCRYPTED:':
+                            decrypted_data = decrypted_message(data[10:], PRIVAT_KEY_SERVER)
+                            decode_data_dict = deserialization_message_list(decrypted_data)
+                        else:
+                            decode_data_dict = deserialization_message_list(data)
                         for el in decode_data_dict:
                             if el['action'] == 'authorization' and not self.database.check_authenticated(
                                         el['user']['user_login'], el['user']['user_password']):
@@ -114,7 +130,14 @@ class Server(metaclass=ServerVerifier):
                                     if user not in self.name:
                                         self.name[socket_client_mes_name] = user
                                     byte_message = serialization_message(message_response)
+                                    result = encrypted_message(byte_message, socket_client_message['public_key'])
                                     app_log_server.info(f'Пользователь {user} авторизирован!')
+                                    socket_client_mes_name.send(result)
+                                elif socket_client_message['action'] == 'get_public_key' \
+                                        and message_response['response'] == 200:
+                                    message_response['public_key'] = PUBLIC_KEY_SERVER.decode()
+                                    byte_message = serialization_message(message_response)
+                                    app_log_server.info(f'Публичный ключ отправлен')
                                     socket_client_mes_name.send(byte_message)
                                 elif socket_client_message['action'] == 'authorization' \
                                         and message_response['response'] == 401:
@@ -135,6 +158,9 @@ class Server(metaclass=ServerVerifier):
                                     byte_message = serialization_message(message_response)
                                     app_log_server.info(f'Пользователь не зарегестрирован!')
                                     socket_client_mes_name.send(byte_message)
+                                    socket_client_mes_name.close()
+                                    self.clients.remove(socket_client_mes_name)
+                                    del self.name[socket_client_mes_name]
                                 elif socket_client_message['action'] == 'get_users' \
                                         and message_response['response'] == 200:
                                     user = socket_client_message['user']['user_login']
@@ -169,8 +195,8 @@ class Server(metaclass=ServerVerifier):
                                         and message_response['response'] == 202:
                                     user = socket_client_message['user']['user_login']
                                     list_messages_user = self.database.get_history_message_user(user)
-                                    message_response['alert'] = list_messages_user
-                                    message_response['message'] = 'Сообщения отправлены'
+                                    message_response['alert'] = 'Сообщения отправлены'
+                                    message_response['message'] = list_messages_user
                                     byte_message = serialization_message(message_response)
                                     app_log_server.info(
                                         f'Сообщения пользователя {user} готовы!')
@@ -254,24 +280,26 @@ class Server(metaclass=ServerVerifier):
                 'message': message['mess_text']
             }
 
+            hash_mes = database.add_history_message(user_login, message['to'], message['mess_text'])
+            msg_from['hash_message'] = hash_mes
+            byte_message = serialization_message(msg_from)
+            sock.send(byte_message)
+
             for key, value in self.name.items():
-                hash_mes = database.add_history_message(user_login, message['to'], message['mess_text'])
-                msg_from['hash_message'] = hash_mes
-                byte_message = serialization_message(msg_from)
-                sock.send(byte_message)
-                if value == message['to'] and database.check_login(message['to']):
+                if value == message['to']:
                     msg_to['hash_message'] = hash_mes
                     byte_message = serialization_message(msg_to)
                     key.send(byte_message)
-                return 'Ok'
-
-            return 'Error'
+            return 'Ok'
 
         # если администратор хочет получить информацию о пользователях
         elif 'action' in message and message['action'] == 'get_users' and 'time' in message and 'user' in message and \
                 'user_login' in message['user'] and database.check_login(user_login) and 'token' in message['user'] and \
                 database.check_authorized(user_login, message['user']['token']) and database.check_admin(user_login):
             return {'response': 200, 'user_name': user_login, 'alert': 'Список пользователей отправлен'}
+
+        elif 'action' in message and message['action'] == 'get_public_key':
+            return {'response': 200, 'alert': 'Публичный ключ отправлен', 'public_key': ''}
 
         # если пользователь хочет получить сообщения пользователя
         elif 'action' in message and message['action'] == 'get_messages_users' and 'time' in message and \
@@ -305,8 +333,10 @@ class Server(metaclass=ServerVerifier):
         elif 'action' in message and message['action'] == 'registration' and 'time' in message and \
                 'user' in message and 'user_login' in message['user'] and 'user_password' in message['user']:
             password_hash = database.hash_password(message['user']['user_password'])
-            database.register(message['user']['user_login'], password_hash)
-            return {'response': 200, 'user_name': user_login, 'alert': 'Успешная регистрация'}
+            result = database.register(message['user']['user_login'], password_hash)
+            if result == 'Ok':
+                return {'response': 200, 'user_name': user_login, 'alert': 'Успешная регистрация'}
+            return {'response': 400, 'user_name': user_login, 'alert': 'Данные не валидны'}
 
         # если пользователь отправил сообщение для регистрации, но данные не валидны
         # elif 'action' in message and message['action'] == 'registration' and 'time' in message and \

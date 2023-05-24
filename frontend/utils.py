@@ -1,7 +1,34 @@
 import sys, json, socket, hashlib, logging, inspect
+from Crypto.Cipher import PKCS1_OAEP
+from Crypto.PublicKey import RSA
 
 app_log_client = logging.getLogger('client')
 
+
+def generic_key_client():
+    key = RSA.generate(8192)
+    PRIVAT_KEY = key.export_key()
+    PUBLIC_KEY = key.public_key().export_key()
+    return PRIVAT_KEY, PUBLIC_KEY
+
+def get_public_key(server, msg):
+    msg_json = serialization_message(msg)
+    server.send(msg_json)
+    data = server.recv(4096)
+    message = deserialization_message(data)
+    return message['public_key']
+
+def encrypted_message(msg, public_key):
+    resipient_key = RSA.import_key(public_key)
+    cipher = PKCS1_OAEP.new(resipient_key)
+    result = b'ENCRYPTED:' + cipher.encrypt(msg)
+    return result
+
+def decrypted_message(msg, privat_key):
+    resipient_key = RSA.import_key(privat_key)
+    cipher = PKCS1_OAEP.new(resipient_key)
+    result = cipher.decrypt(msg)
+    return result
 
 def serialization_message(message):
     """Сериализуем сообщение"""
@@ -26,7 +53,7 @@ def init_socket_tcp():
 def install_param_in_socket_client():
     """Устанавливаем введенные пользователем параметры подключения к серверу/создания сервера"""
     param = sys.argv
-    port = 8000
+    port = 8001
     addr = 'localhost'
     try:
         for i in param:

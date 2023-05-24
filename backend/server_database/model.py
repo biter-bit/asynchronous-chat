@@ -15,6 +15,7 @@ class User(Base):
     info = Column(String)
     role = Column(String, nullable=False)
     authorized = Column(Boolean, default=False)
+    salt = Column(String, nullable=False)
 
 
 class History(Base):

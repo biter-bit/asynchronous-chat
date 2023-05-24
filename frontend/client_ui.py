@@ -1,3 +1,5 @@
+import time
+
 from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtWidgets import QMainWindow, QStackedWidget, QWidget, QPushButton, QLineEdit, QLabel, QMessageBox
 from PyQt5.QtCore import Qt
@@ -497,7 +499,7 @@ class ServerGUI(QMainWindow):
             self.client_recipient = start_thread_client_recipient(result, self.server, self.database)
             self.client_sender = start_thread_client_send(result, self.server, self.database)
             self.client_recipient.message_received.connect(self.logout)
-            self.client_recipient.message_user_received.connect(lambda item: self.send_message_user_one(item))
+            self.client_recipient.message_user_received.connect(lambda item: self.display_messages(item))
             self.client_recipient.search_contact_signal.connect(lambda item: self.output_found_contacts(item))
             for i in self.database.get_contacts():
                 item = QtWidgets.QListWidgetItem()
@@ -520,7 +522,16 @@ class ServerGUI(QMainWindow):
             self.login_widget.lineEdit.setFocus()
             self.server.close()
         else:
-            pass
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Warning)
+            msg.setText("Данные не валидны")
+            msg.setWindowTitle("Ошибка")
+            msg.exec_()
+            # очищаем поля ввода и устанавливаем фокус на поле логина
+            self.register_widget.lineEdit_login.setText("")
+            self.register_widget.lineEdit_password.setText("")
+            self.register_widget.lineEdit_login.setFocus()
+            self.server.close()
 
     def add_contact(self, item):
         msg = {
@@ -533,7 +544,7 @@ class ServerGUI(QMainWindow):
         mes = {
             'request': '/message',
             'message': self.user_target_widget.send_line.text(),
-            'to': self.to_user.text()
+            'to': self.to_user
 
         }
         self.client_sender.send_message(mes)
@@ -542,16 +553,31 @@ class ServerGUI(QMainWindow):
     def del_message_user(self, widget, event):
         pass
 
-    def send_message_user_one(self, item):
-        if self.to_user and self.to_user.text() == item:
+    # используется для преобразования обьекта пользователя в имя (str) и передается в качестве аргумента функции d_m
+    def user_name_message_display_func(self, user_obj):
+        self.to_user = user_obj.text()
+        self.display_messages(user_obj.text())
+
+    # отображает переписку с пользователем (удаляет все сообщения и добавляет имеющиеся)
+    def display_messages(self, item):
+        if self.to_user:
+            # делаем виджет с перепиской центральным
+            self.stack.setCurrentWidget(self.user_target_widget)
+
+            # удаляем все отображаемые сообщения
             for i in self.user_target_widget.message_widget.findChildren(QtWidgets.QLabel):
                 i.deleteLater()
+
+            # получаем все сообщения с выбранным пользователем
             mes = self.database.get_messages(item)
+
+            # добавляем имя пользователя на экран, с кем ведется переписка
             self.user_target_widget.label = QtWidgets.QLabel()
             self.user_target_widget.label.setText(item)
-            self.user_target_widget.layout_scroll.addWidget(self.user_target_widget.label, 0,
-                                                            Qt.AlignCenter | Qt.AlignTop)
+            self.user_target_widget.layout_scroll.addWidget(self.user_target_widget.label, 0, Qt.AlignCenter | Qt.AlignTop)
             self.user_target_widget.label.setStyleSheet("color: white")
+
+            # если сообщения есть, то выводим их в нужном формате
             if mes:
                 for i in mes:
                     text = i['message']
@@ -559,25 +585,24 @@ class ServerGUI(QMainWindow):
                     self.user_target_widget.label2[i['from_user']].setText(i['from_user'] + ':<br>')
                     while True:
                         if len(text) // 30:
-                            self.user_target_widget.label2[i['from_user']].setText(
-                                self.user_target_widget.label2[i['from_user']].text() + text[:30] + '<br>')
+                            self.user_target_widget.label2[i['from_user']].setText(self.user_target_widget.label2[i['from_user']].text() + text[:30] + '<br>')
                             text = text[30:]
                         else:
-                            self.user_target_widget.label2[i['from_user']].setText(
-                                self.user_target_widget.label2[i['from_user']].text() + text)
+                            self.user_target_widget.label2[i['from_user']].setText(self.user_target_widget.label2[i['from_user']].text() + text)
                             break
                     self.user_target_widget.label2[i['from_user']].setMargin(10)
                     self.user_target_widget.label2[i['from_user']].setMinimumSize(QtCore.QSize(100, 60))
                     if i['from_user'] == self.database.user_login:
-                        self.user_target_widget.layout_scroll.addWidget(self.user_target_widget.label2[i['from_user']],
-                                                                        0, Qt.AlignRight | Qt.AlignTop)
+                        self.user_target_widget.layout_scroll.addWidget(self.user_target_widget.label2[i['from_user']], 0, Qt.AlignRight | Qt.AlignTop)
                     else:
-                        self.user_target_widget.layout_scroll.addWidget(self.user_target_widget.label2[i['from_user']],
-                                                                        0,
-                                                                        Qt.AlignLeft | Qt.AlignTop)
-                    self.user_target_widget.label2[i['from_user']].setStyleSheet(
-                        "border-radius: 10px; background-color: #33393f; color: white")
+                        self.user_target_widget.layout_scroll.addWidget(self.user_target_widget.label2[i['from_user']], 0,
+                                                                 Qt.AlignLeft | Qt.AlignTop)
+                    self.user_target_widget.label2[i['from_user']].setStyleSheet("border-radius: 10px; background-color: #33393f; color: white")
+
+            # отчищаем всех пользователей на экране справа
             self.user_target_widget.users_list.clear()
+
+            # выводим всех пользователей на экран
             for i in self.database.get_contacts():
                 item = QtWidgets.QListWidgetItem()
                 item.setText(str(i))
@@ -585,50 +610,6 @@ class ServerGUI(QMainWindow):
                 self.user_target_widget.users_list.addItem(item)
             scroll_bar = self.user_target_widget.scroll_area.verticalScrollBar()
             scroll_bar.rangeChanged.connect(lambda: scroll_bar.setValue(scroll_bar.maximum()))
-
-    # отображает переписку с пользователем (удаляет все сообщения и добавляет имеющиеся)
-    def display_messages(self, item):
-        self.stack.setCurrentWidget(self.user_target_widget)
-        self.to_user = item
-
-        self.client_sender.send_message({'request': '/get_messages_users'})
-
-        for i in self.user_target_widget.message_widget.findChildren(QtWidgets.QLabel):
-            i.deleteLater()
-        mes = self.database.get_messages(item.text())
-        self.user_target_widget.label = QtWidgets.QLabel()
-        self.user_target_widget.label.setText(item.text())
-        self.user_target_widget.layout_scroll.addWidget(self.user_target_widget.label, 0, Qt.AlignCenter | Qt.AlignTop)
-        self.user_target_widget.label.setStyleSheet("color: white")
-        if mes:
-            for i in mes:
-                text = i['message']
-                self.user_target_widget.label2 = {i['from_user']: QtWidgets.QLabel()}
-                self.user_target_widget.label2[i['from_user']].setText(i['from_user'] + ':<br>')
-                while True:
-                    if len(text) // 30:
-                        self.user_target_widget.label2[i['from_user']].setText(self.user_target_widget.label2[i['from_user']].text() + text[:30] + '<br>')
-                        text = text[30:]
-                    else:
-                        self.user_target_widget.label2[i['from_user']].setText(self.user_target_widget.label2[i['from_user']].text() + text)
-                        break
-                self.user_target_widget.label2[i['from_user']].setMargin(10)
-                self.user_target_widget.label2[i['from_user']].setMinimumSize(QtCore.QSize(100, 60))
-                if i['from_user'] == self.database.user_login:
-                    self.user_target_widget.layout_scroll.addWidget(self.user_target_widget.label2[i['from_user']], 0, Qt.AlignRight | Qt.AlignTop)
-                else:
-                    self.user_target_widget.layout_scroll.addWidget(self.user_target_widget.label2[i['from_user']], 0,
-                                                             Qt.AlignLeft | Qt.AlignTop)
-                self.user_target_widget.label2[i['from_user']].setStyleSheet("border-radius: 10px; background-color: #33393f; color: white")
-        self.user_target_widget.users_list.clear()
-
-        for i in self.database.get_contacts():
-            item = QtWidgets.QListWidgetItem()
-            item.setText(str(i))
-            item.setTextAlignment(Qt.AlignCenter)
-            self.user_target_widget.users_list.addItem(item)
-        scroll_bar = self.user_target_widget.scroll_area.verticalScrollBar()
-        scroll_bar.rangeChanged.connect(lambda: scroll_bar.setValue(scroll_bar.maximum()))
 
     # отображает контакты в нужном формате в графе "Поиск"
     def output_found_contacts(self, item):
@@ -754,10 +735,10 @@ class ServerGUI(QMainWindow):
         self.login_widget.pushButton_3.clicked.connect(self.registration)
 
         # выводим историю сообщений пользователя
-        self.user_widget.users_list.itemDoubleClicked.connect(self.display_messages)
+        self.user_widget.users_list.itemDoubleClicked.connect(self.user_name_message_display_func)
 
         # выводим историю сообщений пользователя
-        self.user_target_widget.users_list.itemDoubleClicked.connect(self.display_messages)
+        self.user_target_widget.users_list.itemDoubleClicked.connect(self.user_name_message_display_func)
 
         # отправляем сообщение пользователю
         self.user_target_widget.send_button.clicked.connect(self.send_message_user)
