@@ -560,6 +560,13 @@ class ServerGUI(QMainWindow):
 
     # отображает переписку с пользователем (удаляет все сообщения и добавляет имеющиеся)
     def display_messages(self, item):
+        mes = {
+            'request': '/message',
+            'message': self.user_target_widget.send_line.text(),
+            'to': self.to_user
+
+        }
+        self.client_sender.send_message()
         if self.to_user:
             # делаем виджет с перепиской центральным
             self.stack.setCurrentWidget(self.user_target_widget)

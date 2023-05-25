@@ -2,7 +2,7 @@ import logging, select, socket, time
 from descriptor import ServerCheckPort
 from metaclasses import ServerVerifier
 from utils import serialization_message, deserialization_message_list, install_param_in_socket_server, \
-    decrypted_message, encrypted_message
+    decrypted_message, encrypted_message, generic_key_server
 from server_database.crud import ServerStorage
 from Crypto.PublicKey import RSA
 from Crypto.Cipher import PKCS1_OAEP
@@ -35,18 +35,12 @@ class Server(metaclass=ServerVerifier):
         self.sock.settimeout(1)
         self.sock.listen()
 
-    def generic_key_server(self):
-        key = RSA.generate(8192)
-        PRIVAT_KEY = key.export_key()
-        PUBLIC_KEY = key.public_key().export_key()
-        return PRIVAT_KEY, PUBLIC_KEY
-
     def get_and_send_message(self):
         # инициализируем сокет
         self.socket_init()
 
         # генерируем ключи для сервера
-        PRIVAT_KEY_SERVER, PUBLIC_KEY_SERVER = self.generic_key_server()
+        PRIVAT_KEY_SERVER, PUBLIC_KEY_SERVER, SYMMETRIC_KEY = generic_key_server()
 
         while True:
             try:
@@ -81,7 +75,7 @@ class Server(metaclass=ServerVerifier):
                         # !!! отправить ответ на авторизацию в зашифрованом виде !!!!
                         data = i.recv(4096)
                         if data[:10] == b'ENCRYPTED:':
-                            decrypted_data = decrypted_message(data[10:], PRIVAT_KEY_SERVER)
+                            decrypted_data = decrypted_message(data[10:], PRIVAT_KEY_SERVER.decode())
                             decode_data_dict = deserialization_message_list(decrypted_data)
                         else:
                             decode_data_dict = deserialization_message_list(data)
@@ -130,7 +124,7 @@ class Server(metaclass=ServerVerifier):
                                     if user not in self.name:
                                         self.name[socket_client_mes_name] = user
                                     byte_message = serialization_message(message_response)
-                                    result = encrypted_message(byte_message, socket_client_message['public_key'])
+                                    result = encrypted_message(byte_message, socket_client_message['public_key'], SYMMETRIC_KEY)
                                     app_log_server.info(f'Пользователь {user} авторизирован!')
                                     socket_client_mes_name.send(result)
                                 elif socket_client_message['action'] == 'get_public_key' \

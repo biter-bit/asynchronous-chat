@@ -1,34 +1,61 @@
 import sys, json, socket, hashlib, logging, inspect
-from Crypto.Cipher import PKCS1_OAEP
+from Crypto.Cipher import PKCS1_OAEP, AES
 from Crypto.PublicKey import RSA
+from Crypto.Random import get_random_bytes
+import base64
 
 app_log_client = logging.getLogger('client')
 
 
+def encrypted_message_for_send_user(msg, public_key):
+    resipient_key = RSA.import_key(public_key)
+    cipher = PKCS1_OAEP.new(resipient_key)
+    encrypted_mes = cipher.encrypt(msg)
+    return encrypted_mes
+
 def generic_key_client():
-    key = RSA.generate(8192)
+    """Генерируем публичный и приватный ключи для шифровки сообщения и возвращаем их в бинарном формате"""
+    key = RSA.generate(1024)
     PRIVAT_KEY = key.export_key()
     PUBLIC_KEY = key.public_key().export_key()
-    return PRIVAT_KEY, PUBLIC_KEY
+    SYMMETRIC_KEY = get_random_bytes(16)
+    return PRIVAT_KEY, PUBLIC_KEY, SYMMETRIC_KEY
 
 def get_public_key(server, msg):
+    """Сериализуем сообщение и отправляем запрос на получение публичного ключа + отправку клиентского ключа.
+    Получаем и возвращаем публичный ключ сервера в бинарном формате"""
     msg_json = serialization_message(msg)
     server.send(msg_json)
     data = server.recv(4096)
     message = deserialization_message(data)
     return message['public_key']
 
-def encrypted_message(msg, public_key):
+def encrypted_message(msg, public_key, symmetric_key):
+    nonce = get_random_bytes(16)
     resipient_key = RSA.import_key(public_key)
     cipher = PKCS1_OAEP.new(resipient_key)
-    result = b'ENCRYPTED:' + cipher.encrypt(msg)
-    return result
+    encrypted_symmetric_key = cipher.encrypt(symmetric_key)
+    cipher_aes = AES.new(symmetric_key, AES.MODE_EAX, nonce)
+
+    crypt_mes, tag_mac = cipher_aes.encrypt_and_digest(msg)
+    encrypted_data = {
+        'message': base64.b64encode(crypt_mes).decode('utf-8'),
+        'symmetric_key': base64.b64encode(encrypted_symmetric_key).decode('utf-8'),
+        'nonce': base64.b64encode(nonce).decode('utf-8')
+    }
+    encode_msg = 'ENCRYPTED:'.encode('utf-8') + serialization_message(encrypted_data)
+
+    return encode_msg
 
 def decrypted_message(msg, privat_key):
+    des_mes = deserialization_message(msg)
     resipient_key = RSA.import_key(privat_key)
     cipher = PKCS1_OAEP.new(resipient_key)
-    result = cipher.decrypt(msg)
-    return result
+    decrypt_symmetric_key = cipher.decrypt(base64.b64decode(des_mes['symmetric_key']))
+    cipher_aes = AES.new(decrypt_symmetric_key, AES.MODE_EAX, base64.b64decode(des_mes['nonce']))
+    decrypt_mes = cipher_aes.decrypt(base64.b64decode(des_mes['message']))
+
+    return decrypt_mes
 
 def serialization_message(message):
     """Сериализуем сообщение"""
@@ -53,7 +80,7 @@ def init_socket_tcp():
 def install_param_in_socket_client():
     """Устанавливаем введенные пользователем параметры подключения к серверу/создания сервера"""
     param = sys.argv
-    port = 8001
+    port = 8000
     addr = 'localhost'
     try:
         for i in param:

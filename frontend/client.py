@@ -1,5 +1,6 @@
 from utils import init_socket_tcp, deserialization_message, serialization_message, deserialization_message_list, \
-    install_param_in_socket_client, get_public_key, encrypted_message, generic_key_client, decrypted_message
+    install_param_in_socket_client, get_public_key, encrypted_message, generic_key_client, decrypted_message, \
+    encrypted_message_for_send_user
 import datetime, logging, json, threading
 from metaclasses import ClientVerifier
 from client_database.crud import ClientStorage
@@ -10,7 +11,7 @@ app_log_client = logging.getLogger('client')
 
 
 def message_template(login='', password='', token='', action='', message='', to='', add_contact='',
-                     statistic='', search_contact='', public_key=''):
+                     statistic='', search_contact='', public_key='', crypto_symmetric_key=''):
     msg = {
         'action': action,
         'time': datetime.datetime.now().strftime('%d.%m.%Y'),
@@ -24,7 +25,8 @@ def message_template(login='', password='', token='', action='', message='', to=
         'user_id': add_contact,
         'statistic': statistic,
         'search_contact': search_contact,
-        'public_key': public_key
+        'public_key': public_key,
+        'crypto_symmetric_key': crypto_symmetric_key
     }
     return msg
 
@@ -38,6 +40,7 @@ class ClientSender(threading.Thread, metaclass=ClientVerifier):
         self.msg = ''
         super().__init__()
         self._stop_event = threading.Event()
+        self.private_key, self.public_key, self.symmetric = generic_key_client()
 
     def send_message(self, message):
         if message['request'] == '/quit':
@@ -46,6 +49,8 @@ class ClientSender(threading.Thread, metaclass=ClientVerifier):
             byte_msg = serialization_message(msg)
             self.sock.send(byte_msg)
             self.stop()
+        # elif message['request'] == '/get_send_public_key':
+        #     msg = message_template(action='get_send_public_key', public_key=self.public_key)
         elif message['request'] == '/get_target_contact':
             msg = message_template(action='get_target_contact', login=self.account_name, token=self.token,
                                    search_contact=message['args'])
@@ -178,18 +183,24 @@ def authorization(server, login, password):
         'token': ''
     }
     try:
-        PRIVAT_KEY_CLIENT, PUBLIC_KEY_CLIENT = generic_key_client()
+        # сгенерировал приватный и публичный ключ клиента
+        PRIVAT_KEY_CLIENT, PUBLIC_KEY_CLIENT, SYMMETRIC_KEY = generic_key_client()
+        # создаем сообщение для получения публичного ключа сервера
         mes = message_template(action='get_public_key', public_key=PUBLIC_KEY_CLIENT.decode())
-        public_key_server = get_public_key(server, mes)
+        # отправляем запрос на получение публичного ключа сервера и отправляем ему публичный ключ клиента
+        PUBLIC_KEY_SERVER = get_public_key(server, mes)
 
         result_data['name_account'] = login
         result_data['password'] = password
 
-        # создаем сообщение и отправляем серверу
+        # создаем сообщение на авторизацию
         msg = message_template(action='authorization', login=result_data['name_account'],
                                password=result_data['password'], public_key=PUBLIC_KEY_CLIENT.decode())
+        # приводим json обьект к строке и переводим строку в байты
         encode_msg = serialization_message(msg)
-        encrypted_mes = encrypted_message(encode_msg, public_key_server)
+        # шифруем сообщение с помощью публичного ключа сервера
+        encrypted_mes = encrypted_message(encode_msg, PUBLIC_KEY_SERVER, SYMMETRIC_KEY)
+        # отправляем сообщение серверу на авторизацию
         server.send(encrypted_mes)
 
         # получаем сообщение сервера
