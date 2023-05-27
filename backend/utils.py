@@ -8,59 +8,27 @@ from server_database.crud import ServerStorage
 app_log_server = logging.getLogger('server')
 
 
-def login_required(login, token):
-    def decorator(func):
-        def wrapper(*args, **kwargs):
-            database = ServerStorage()
-            try:
-                if database.check_authorized(login, token):
-                    return func(*args, **kwargs)
-                else:
-                    raise Exception('Unauthorized')
-            except Exception as e:
-                return str(e)
-        return wrapper
-    return decorator
+def check_user_is_online(login, socket_user):
+    """Функция проверяет онлайн пользователь или нет"""
+    database = ServerStorage()
+    for i in socket_user:
+        if login == socket_user[i] and database.check_online(login):
+            return True
+    return False
 
-def generic_key_server():
-    """Генерируем публичный и приватный ключи для шифровки сообщения и возвращаем их в бинарном формате"""
-    key = RSA.generate(1024)
-    PRIVAT_KEY = key.export_key()
-    PUBLIC_KEY = key.public_key().export_key()
-    SYMMETRIC_KEY = get_random_bytes(16)
-    return PRIVAT_KEY, PUBLIC_KEY, SYMMETRIC_KEY
-
-def encrypted_message(msg, public_key, symmetric_key):
-    nonce = get_random_bytes(16)
-    resipient_key = RSA.import_key(public_key)
-    cipher = PKCS1_OAEP.new(resipient_key)
-    encrypted_symmetric_key = cipher.encrypt(symmetric_key)
-    cipher_aes = AES.new(symmetric_key, AES.MODE_EAX, nonce)
-
-    crypt_mes, tag_mac = cipher_aes.encrypt_and_digest(msg)
-    encrypted_data = {
-        'message': base64.b64encode(crypt_mes).decode('utf-8'),
-        'symmetric_key': base64.b64encode(encrypted_symmetric_key).decode('utf-8'),
-        'nonce': base64.b64encode(nonce).decode('utf-8')
-    }
-    encode_msg = 'ENCRYPTED:'.encode('utf-8') + serialization_message(encrypted_data)
-
-    return encode_msg
-
-def decrypted_message(msg, privat_key):
-    des_mes = deserialization_message(msg)
-    resipient_key = RSA.import_key(privat_key)
-    cipher = PKCS1_OAEP.new(resipient_key)
-    decrypt_symmetric_key = cipher.decrypt(base64.b64decode(des_mes['symmetric_key']))
-    cipher_aes = AES.new(decrypt_symmetric_key, AES.MODE_EAX, base64.b64decode(des_mes['nonce']))
-    decrypt_mes = cipher_aes.decrypt(base64.b64decode(des_mes['message']))
-
-    return decrypt_mes
+def login_required(func):
+    def wrapper(*args, **kwargs):
+        database = ServerStorage()
+        if database.check_authorized(args[1]['user']['user_login'], args[1]['user']['token']):
+            return func(*args, *kwargs)
+        else:
+            return Exception
+    return wrapper
 
 def install_param_in_socket_server():
     """Устанавливаем введенные пользователем параметры подключения к серверу/создания сервера"""
     param = sys.argv
-    port = 8000
+    port = 8007
     addr = 'localhost'
     try:
         for i in param:

@@ -204,10 +204,20 @@ def authorization(server, login, password):
         server.send(encrypted_mes)
 
         # получаем сообщение сервера
-        data = server.recv(4096)
-        decrypt_data = decrypted_message(data[10:], PRIVAT_KEY_CLIENT)
-        message = deserialization_message(decrypt_data)
-        if message['response'] == 401 and message['role'] == 'Нет доступа':
+        data_res = b''
+        while True:
+            data = server.recv(4096)
+            if not data:
+                break
+            data_res = data_res + data
+            if len(data) < 4096:
+                break
+        if data_res[:10] == b'ENCRYPTED:':
+            decrypt_data = decrypted_message(data_res[10:], PRIVAT_KEY_CLIENT)
+            message = deserialization_message(decrypt_data)
+        else:
+            message = deserialization_message(data_res)
+        if message['response'] == 409 and message['role'] == 'Нет доступа':
             result_data['role'] = 'Нет доступа'
             print('Этот пользователь уже в системе.')
             app_log_client.info(f'Соединение с сервером не установлено. Ответ сервера: {message["response"]}')
@@ -273,8 +283,15 @@ def init_database(data, server):
     server.send(byte_msg)
 
     # получаем сообщение от сервера и добавляем контакты в б.д.
-    server_data = server.recv(4096)
-    list_message = deserialization_message_list(server_data)
+    server_data_res = b''
+    while True:
+        server_data = server.recv(4096)
+        if not server_data:
+            break
+        server_data_res = server_data_res + server_data
+        if len(server_data) < 4096:
+            break
+    list_message = deserialization_message_list(server_data_res)
     for i in list_message:
         app_log_client.info('Ответ получен. %s %s', i['response'], i['alert'])
         if i['response'] == 202:
@@ -289,8 +306,15 @@ def init_database(data, server):
     server.send(byte_msg)
 
     # получаем сообщение от сервера и добавляем сообщения пользователя в б.д.
-    server_data = server.recv(4096)
-    list_message = deserialization_message_list(server_data)
+    server_data_res = b''
+    while True:
+        server_data = server.recv(4096)
+        if not server_data:
+            break
+        server_data_res = server_data_res + server_data
+        if len(server_data) < 4096:
+            break
+    list_message = deserialization_message_list(server_data_res)
     for i in list_message:
         app_log_client.info('Ответ получен. %s %s', i['response'], i['message'])
         if i['response'] == 202:

@@ -77,7 +77,7 @@ class ServerStorage:
 
     def validator_mail(self, login):
         # сделать с помощью регулярок
-        if '@.' not in login and len(login) < 5 or len(login) > 16:
+        if '@.' not in login and len(login) < 5 or len(login) > 40:
             return False
         return True
 
@@ -194,8 +194,18 @@ class ServerStorage:
     def check_authenticated(self, user_login, user_password):
         with self.Session() as session:
             user = session.query(User).filter(User.login == user_login).first()
+            if not user:
+                return False
             password = self.hash_password(user.salt) + self.hash_password(user_password)
-            if user and user.password == password:
+            if user.password == password:
+                return True
+            else:
+                return False
+
+    def check_online(self, user_login):
+        with self.Session() as session:
+            user = session.query(User).filter(User.login == user_login).first()
+            if user and user.authorized:
                 return True
             else:
                 return False
