@@ -13,49 +13,82 @@ def encrypted_message_for_send_user(msg, public_key):
     encrypted_mes = cipher.encrypt(msg)
     return encrypted_mes
 
-def generic_key_client():
-    """Генерируем публичный и приватный ключи для шифровки сообщения и возвращаем их в бинарном формате"""
+def generic_public_and_privat_key_client():
+    """Генерируем публичный и приватный ключи для шифровки сообщения и возвращаем их в строковом формате"""
     key = RSA.generate(1024)
-    PRIVAT_KEY = key.export_key()
-    PUBLIC_KEY = key.public_key().export_key()
+    PRIVAT_KEY = key.export_key().decode()
+    PUBLIC_KEY = key.public_key().export_key().decode()
+    return PRIVAT_KEY, PUBLIC_KEY
+
+def generic_symmetric_key_client():
+    """Фукнция генерирует симметричный ключ для шифровки сообщения. Возвращает его в строковом формате"""
     SYMMETRIC_KEY = get_random_bytes(16)
-    return PRIVAT_KEY, PUBLIC_KEY, SYMMETRIC_KEY
+    return SYMMETRIC_KEY
 
 def get_public_key(server, msg):
-    """Сериализуем сообщение и отправляем запрос на получение публичного ключа + отправку клиентского ключа.
-    Получаем и возвращаем публичный ключ сервера в бинарном формате"""
+    """Сериализуем сообщение и отправляем запрос на получение публичного ключа сервера.
+    Получаем и возвращаем публичный ключ сервера в строковом формате"""
     msg_json = serialization_message(msg)
     server.send(msg_json)
     data = server.recv(4096)
     message = deserialization_message(data)
     return message['public_key']
 
-def encrypted_message(msg, public_key, symmetric_key):
+def encrypted_symmetric_key(message, sym_key):
+    """
+    Функция шифрует сообщение. Принимает сообщение и симметричный ключ в строковом виде. Возвращает шифрованное
+    сообщение в бинарном виде
+    :param message:
+    :param sym_key:
+    :return:
+    """
     nonce = get_random_bytes(16)
-    resipient_key = RSA.import_key(public_key)
-    cipher = PKCS1_OAEP.new(resipient_key)
-    encrypted_symmetric_key = cipher.encrypt(symmetric_key)
-    cipher_aes = AES.new(symmetric_key, AES.MODE_EAX, nonce)
+    # создаем обьект с нашим симметричным ключом, который позволит зашифровать сообщение
+    cipher_aes = AES.new(sym_key, AES.MODE_EAX, nonce)
+    # шифруем наше сообщение, с помощью симметричного ключа
+    crypt_mes, tag_mac = cipher_aes.encrypt_and_digest(message.encode())
+    return crypt_mes
 
+def encrypted_message(msg, public_key, symmetric_key, encrypted=1):
+    # создаем обьект асимметричного ключа
+    resipient_key = RSA.import_key(public_key)
+    # создаем обьект с нашим асимметричным ключом, который позволит зашифровать симметричный ключ
+    cipher = PKCS1_OAEP.new(resipient_key)
+    # шифруем симметричный ключ алгоритмом PKCS1_OAEP
+    encrypted_symmetric_key = cipher.encrypt(symmetric_key)
+
+    # создаем контрольную сумму для нашего симметричного алгоритма шифрования
+    nonce = get_random_bytes(16)
+    # создаем обьект с нашим симметричным ключом, который позволит зашифровать сообщение
+    cipher_aes = AES.new(symmetric_key, AES.MODE_EAX, nonce)
+    # шифруем наше сообщение, с помощью симметричного ключа
     crypt_mes, tag_mac = cipher_aes.encrypt_and_digest(msg)
+    # собираем наше сообщение для отправки
     encrypted_data = {
         'message': base64.b64encode(crypt_mes).decode('utf-8'),
         'symmetric_key': base64.b64encode(encrypted_symmetric_key).decode('utf-8'),
         'nonce': base64.b64encode(nonce).decode('utf-8')
     }
-    encode_msg = 'ENCRYPTED:'.encode('utf-8') + serialization_message(encrypted_data)
+    # добавляем к нему тег, который позволит понять зашифровано сообщение или нет + сериализуем сообщение
+    if encrypted == 1:
+        encode_msg = 'ENCRYPTED:'.encode('utf-8') + serialization_message(encrypted_data)
+    else:
+        encode_msg = serialization_message(encrypted_data)
 
     return encode_msg
 
-def decrypted_message(msg, privat_key):
-    des_mes = deserialization_message(msg)
+def decrypted_message(msg, privat_key, decrypt=1):
+    if decrypt:
+        des_mes = deserialization_message(msg)
+    else:
+        des_mes = msg
     resipient_key = RSA.import_key(privat_key)
     cipher = PKCS1_OAEP.new(resipient_key)
     decrypt_symmetric_key = cipher.decrypt(base64.b64decode(des_mes['symmetric_key']))
     cipher_aes = AES.new(decrypt_symmetric_key, AES.MODE_EAX, base64.b64decode(des_mes['nonce']))
     decrypt_mes = cipher_aes.decrypt(base64.b64decode(des_mes['message']))
 
-    return decrypt_mes
+    return decrypt_mes, decrypt_symmetric_key
 
 def serialization_message(message):
     """Сериализуем сообщение"""
@@ -80,7 +113,7 @@ def init_socket_tcp():
 def install_param_in_socket_client():
     """Устанавливаем введенные пользователем параметры подключения к серверу/создания сервера"""
     param = sys.argv
-    port = 8007
+    port = 8005
     addr = 'localhost'
     try:
         for i in param:
@@ -104,7 +137,7 @@ def sys_param_reboot():
 
 
 def decode_message(message):
-    dec_mes = message.decode('unicode_escape')
+    dec_mes = message.decode('utf-8')
     return dec_mes
 
 

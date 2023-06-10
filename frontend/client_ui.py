@@ -444,16 +444,12 @@ class ServerGUI(QMainWindow):
         self.chat_signals()
 
     def login(self):
-        # подключаемся к серверу
         self.server = connect_server()
-
         # запоминаем логин и пароль, который ввел пользователь
         login = self.login_widget.lineEdit.text()
         password = self.login_widget.lineEdit_2.text()
-
         # авторизируемся на сервере
-        result = authorization(self.server, login, password)
-
+        result = authorization(login, password, self.server)
         if 'role' in result and result['role'] == 'Нет доступа':
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Warning)
@@ -515,7 +511,7 @@ class ServerGUI(QMainWindow):
 
         result = registration(self.server, login, password)
 
-        if result == 'Ok':
+        if result['response'] == 200:
             self.stack.setCurrentWidget(self.login_widget)
             self.login_widget.lineEdit.setText("")
             self.login_widget.lineEdit_2.setText("")
@@ -540,23 +536,72 @@ class ServerGUI(QMainWindow):
         }
         self.client_sender.send_message(msg)
 
+    def get_public_key_user(self, item):
+        mes = {
+            'request': '/get_public_key',
+            'contact': item
+        }
+        self.client_sender.send_message(mes)
+        while True:
+            public_key = self.database.get_public_key_user(item)
+            if public_key:
+                break
+        return 'Ok'
+
     def send_message_user(self):
+        self.get_public_key_user(self.to_user)
         mes = {
             'request': '/message',
             'message': self.user_target_widget.send_line.text(),
             'to': self.to_user
 
         }
+        list_mes = self.database.get_messages(self.to_user)
         self.client_sender.send_message(mes)
+        while True:
+            if len(list_mes) < len(self.database.get_messages(self.to_user)):
+                break
         self.user_target_widget.send_line.clear()
+        return 'Ok'
 
-    def del_message_user(self, widget, event):
-        pass
+    def get_symmetric_key(self, login):
+        mes = {
+            'request': '/get_symmetric_key',
+            'contact': login,
+        }
+        self.client_sender.send_message(mes)
+        while True:
+            check_symmetric_key_client = self.database.get_symmetric_key_for_communicate_between_users(
+                login
+            )
+            if check_symmetric_key_client:
+                break
+        return 'Ok'
+
+    def get_messages_user(self, login):
+        # создаем сообщение запроса
+        msg = {
+            'request': '/get_messages_users',
+            'login': login
+        }
+        self.client_sender.send_message(msg)
+        return 'Ok'
 
     # используется для преобразования обьекта пользователя в имя (str) и передается в качестве аргумента функции d_m
     def user_name_message_display_func(self, user_obj):
         self.to_user = user_obj.text()
-        self.display_messages(user_obj.text())
+        # получяаем публичный ключ пользователя
+        self.get_public_key_user(self.to_user)
+        time.sleep(2)
+        # добавляем симметричный ключ для расшифровки сообщений (может возникнуть ошибка из-за того, что после
+        # отправки второго запроса сервер не успевает ответить прежде, чем выполниться get_messages_user
+        self.get_symmetric_key(self.to_user)
+        time.sleep(2)
+        # добавляем сообщения
+        self.get_messages_user(self.to_user)
+        time.sleep(2)
+        # # отображаем переписку
+        # self.display_messages(self.to_user)
 
     # отображает переписку с пользователем (удаляет все сообщения и добавляет имеющиеся)
     def display_messages(self, item):
@@ -590,6 +635,7 @@ class ServerGUI(QMainWindow):
                         else:
                             self.user_target_widget.label2[i['from_user']].setText(self.user_target_widget.label2[i['from_user']].text() + text)
                             break
+
                     self.user_target_widget.label2[i['from_user']].setMargin(10)
                     self.user_target_widget.label2[i['from_user']].setMinimumSize(QtCore.QSize(100, 60))
                     if i['from_user'] == self.database.user_login:
@@ -703,7 +749,7 @@ class ServerGUI(QMainWindow):
         self.login_widget.pushButton.clicked.connect(self.login)
 
         # регистрируем пользователя при нажатии кнопки отправить
-        self.register_widget.pushButton_send.clicked.connect(self.register) #!!!!!!!!
+        self.register_widget.pushButton_send.clicked.connect(self.register)
 
         # добавляем возможность вернуться на страницу авторизации
         self.register_widget.pushButton_auth.clicked.connect(self.authorization)

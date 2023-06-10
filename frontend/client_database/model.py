@@ -21,3 +21,14 @@ class Contacts(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     login = Column(String, unique=True, nullable=False)
+    public_key = Column(String)
+    symmetric_key = Column(String)
+
+
+class ServerInfo(Base):
+    """В этой модели хранятся публичные ключи сервера и пользователя"""
+    __tablename__ = 'server_info'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    category = Column(String, unique=True, nullable=False)
+    public_key = Column(String)
