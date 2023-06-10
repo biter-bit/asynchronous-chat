@@ -2,6 +2,7 @@ import logging
 import select
 import socket
 import base64
+import json
 from descriptor import ServerCheckPort
 from metaclasses import ServerVerifier
 from utils import serialization_message
@@ -51,8 +52,27 @@ class Server(metaclass=ServerVerifier):
         self.socket_server.listen()
 
     def create_keys_for_encryption(self):
-        self.PRIVAT_KEY_SERVER, self.PUBLIC_KEY_SERVER, self.SYMMETRIC_KEY = self.generic_key_server()
-        return 'Ok'
+        try:
+            with open('backend/secret/keys_server.json', 'w+', encoding='utf-8'):
+                pass
+            with open('backend/secret/keys_server.json', 'r+', encoding='utf-8') as file:
+                file.seek(0)
+                content = file.read()
+                if content:
+                    result = json.loads(content)
+                    self.PRIVAT_KEY_SERVER = result['privat_key']
+                    self.PUBLIC_KEY_SERVER = result['public_key']
+                else:
+                    data = {}
+                    self.PRIVAT_KEY_SERVER, self.PUBLIC_KEY_SERVER = self.generic_privat_and_public_keys_server()
+                    data['privat_key'] = self.PRIVAT_KEY_SERVER
+                    data['public_key'] = self.PUBLIC_KEY_SERVER
+                    file.seek(0)
+                    json.dump(data, file)
+                    file.truncate()
+            return 'Ok'
+        except FileNotFoundError:
+            return 'Error'
 
     def get_and_send_message(self):
         # инициализируем сокет
@@ -95,7 +115,7 @@ class Server(metaclass=ServerVerifier):
                         # получаем сообщение от пользователя
                         data = i.recv(4096)
                         # проверяем зашифровано сообщение или нет (расшифровываем и декодируем)
-                        decode_data = self.decrypted_message(data, self.PRIVAT_KEY_SERVER.decode())
+                        decode_data = self.decrypted_message(data, self.PRIVAT_KEY_SERVER)
                         # добавляем сообщение пользователя
                         self.sockets_message_of_users[i] = decode_data
                         for el in decode_data:
@@ -122,10 +142,14 @@ class Server(metaclass=ServerVerifier):
                                 self.registration_user_on_server(message_of_user, socket_of_user)
                             elif message_of_user['action'] == 'presence':
                                 self.send_message_user_to_user(message_of_user, socket_of_user)
+                            elif message_of_user['action'] == 'presence_answer':
+                                self.send_message_user_to_user(message_of_user, socket_of_user)
                             elif message_of_user['action'] == 'get_users':
                                 self.get_all_registered_users(message_of_user, socket_of_user)
                             elif message_of_user['action'] == 'get_public_key':
                                 self.send_and_get_public_key_server(message_of_user, socket_of_user)
+                            elif message_of_user['action'] == 'get_public_key_user':
+                                self.send_and_get_public_key_user(message_of_user, socket_of_user)
                             elif message_of_user['action'] == 'get_statistics':
                                 self.get_statistic_all_users(message_of_user, socket_of_user)
                             elif message_of_user['action'] == 'get_target_contact':
@@ -138,28 +162,44 @@ class Server(metaclass=ServerVerifier):
                                 self.add_contact_to_user(message_of_user, socket_of_user)
                             elif message_of_user['action'] == 'quit':
                                 self.logout_user(message_of_user, socket_of_user)
+                            elif message_of_user['action'] == 'symmetric_exchange':
+                                self.exchange_symmetric_keys_users(message_of_user, socket_of_user)
                     except Exception:
                         app_log_server.info(f'Клиент {socket_of_user.fileno()} {socket_of_user.getpeername()} '
                                             f'отключился (отправка)')
                         for mes in self.sockets_message_of_users[socket_of_user]:
                             self.logout_user(mes, socket_of_user)
 
-    def generic_key_server(self):
-        """Генерируем публичный и приватный ключи для шифровки сообщения и возвращаем их в бинарном формате"""
+    def generic_privat_and_public_keys_server(self):
+        """Генерируем публичный и приватный ключи для шифровки сообщения и возвращаем их в строковом формате"""
         key = RSA.generate(1024)
-        PRIVAT_KEY = key.export_key()
-        PUBLIC_KEY = key.public_key().export_key()
-        SYMMETRIC_KEY = get_random_bytes(16)
-        return PRIVAT_KEY, PUBLIC_KEY, SYMMETRIC_KEY
+        PRIVAT_KEY = key.export_key().decode()
+        PUBLIC_KEY = key.public_key().export_key().decode()
+        return PRIVAT_KEY, PUBLIC_KEY
 
-    def encrypted_message(self, msg, public_key, symmetric_key):
+    def generic_symmetric_key_server(self):
+        """Генерируем симметричный ключ и возвращаем его в строковом формате"""
+        SYMMETRIC_KEY = get_random_bytes(16)
+        return SYMMETRIC_KEY
+
+    def encrypted_message(self, msg_byte, public_key, symmetric_key):
+        """
+        Функция шифрует сообщение для дальнейшей отправки. Шифрует сообщение методом гибридного шифрования, т.е.
+        сообщение шифруется, с помощью симметричного ключа, а симметричный ключ шифруется с помощью публичного ключа.
+        Принимает на вход сообщение в бинарном виде, публичный и симметричный ключ в строковом виде.
+        Возвращает готовое сообщение в бинарном виде
+        :param msg_byte:
+        :param public_key:
+        :param symmetric_key:
+        :return:
+        """
         nonce = get_random_bytes(16)
         resipient_key = RSA.import_key(public_key)
         cipher = PKCS1_OAEP.new(resipient_key)
         encrypted_symmetric_key = cipher.encrypt(symmetric_key)
         cipher_aes = AES.new(symmetric_key, AES.MODE_EAX, nonce)
 
-        crypt_mes, tag_mac = cipher_aes.encrypt_and_digest(msg)
+        crypt_mes, tag_mac = cipher_aes.encrypt_and_digest(msg_byte)
         encrypted_data = {
             'message': base64.b64encode(crypt_mes).decode('utf-8'),
             'symmetric_key': base64.b64encode(encrypted_symmetric_key).decode('utf-8'),
@@ -172,6 +212,8 @@ class Server(metaclass=ServerVerifier):
     def decrypted_message(self, data, privat_key):
         if data[:10] == b'ENCRYPTED:':
             decode_mes = deserialization_message(data[10:])
+            if 'action' in decode_mes and decode_mes['action'] == 'send_message_user':
+                return decode_mes
             resipient_key = RSA.import_key(privat_key)
             cipher = PKCS1_OAEP.new(resipient_key)
             decrypt_symmetric_key = cipher.decrypt(base64.b64decode(decode_mes['symmetric_key']))
@@ -182,13 +224,62 @@ class Server(metaclass=ServerVerifier):
             decode_result_message = deserialization_message_list(data)
         return decode_result_message
 
+    def exchange_symmetric_keys_users(self, message, socket_of_user):
+        """
+        Функция отправляет симметричный ключ для расшифровки сообщений между пользователями
+        :param message:
+        :param socket_of_user:
+        :return:
+        """
+        if message['mess_text'] == 'update':
+            self.database.update_contact_add_symmetric_key(
+                message['user']['user_login'], message['to'], json.dumps(message['crypto_symmetric_key'])
+            )
+            return 'Ok'
+        elif message['mess_text'] == 'check_sym_key':
+            # проверить есть ли симметричный ключ
+            symmetric_key_check_to_user = self.database.get_symmetric_key_for_communicate_between_users(
+                message['to'], message['user']['user_login']
+            )
+            symmetric_key_check_from_user = self.database.get_symmetric_key_for_communicate_between_users(
+                message['user']['user_login'], message['to']
+            )
+            if symmetric_key_check_to_user:
+                json_sym_key = json.loads(symmetric_key_check_to_user)
+                msg = {
+                    'response': 200,
+                    'alert': 'Симметричный ключ получен',
+                    'to': message['to'],
+                    'symmetric_key': json_sym_key,
+                    'action': 'old'
+                }
+                user_public_key = self.database.get_public_key_user(message['user']['user_login'])
+                byte_message = serialization_message(msg)
+                result = self.encrypted_message(byte_message, user_public_key, self.SYMMETRIC_KEY)
+                socket_of_user.send(result)
+
+            if not symmetric_key_check_to_user and not symmetric_key_check_from_user:
+                msg = {
+                    'response': 200,
+                    'alert': 'Симметричный ключ получен',
+                    'to': message['to'],
+                    'action': 'new'
+                }
+                user_public_key = self.database.get_public_key_user(message['user']['user_login'])
+                byte_message = serialization_message(msg)
+                result = self.encrypted_message(byte_message, user_public_key, self.SYMMETRIC_KEY)
+                socket_of_user.send(result)
+            return 'Ok'
+
     def authorization_user_on_server(self, message, socket_of_user):
         """Функция принимает сообщение от пользователя на авторизацию, авторизирует его и отправляет ему ответ"""
         user_login = message['user']['user_login']
         role_user = self.database.get_user_role(user_login)
         if 'action' in message and message['action'] == 'authorization' and 'time' in message and \
                 'user' in message and 'user_login' in message['user'] and 'user_password' in message['user'] and \
-                self.database.check_authenticated(user_login, message['user']['user_password']):
+                self.database.check_authenticated(user_login, message['user']['user_password']) and not \
+                check_user_is_online(user_login, self.sockets_logins_of_online_users):
+            self.SYMMETRIC_KEY = self.generic_symmetric_key_server()
             if role_user == 'Администратор':
                 history_obj = self.database.get_history_users()
                 history_message = []
@@ -209,7 +300,6 @@ class Server(metaclass=ServerVerifier):
 
             elif role_user == 'Пользователь':
                 history_obj = []
-                history_message = self.database.get_history_message_user(user_login)
                 token = self.database.login(user_login, socket_of_user)
                 mes = {
                     'response': 200,
@@ -218,40 +308,44 @@ class Server(metaclass=ServerVerifier):
                     'alert': 'Успешная авторизация',
                     'role': 'Пользователь',
                     'users': history_obj,
-                    'users_message': history_message
                 }
                 byte_message = serialization_message(mes)
                 result = self.encrypted_message(byte_message, message['public_key'], self.SYMMETRIC_KEY)
                 app_log_server.info(f'Пользователь {user_login} авторизирован!')
                 socket_of_user.send(result)
 
-            elif not self.database.check_authenticated(message['user']['user_login'], message['user']['user_password']):
-                mes = {
-                    'role': 'Неверный логин или пароль',
-                    'response': 401
-                }
-                result = serialization_message(mes)
-                app_log_server.info(f'Пользователь {user_login} не авторизирован!')
-                socket_of_user.send(result)
-                app_log_server.info(f'Клиент {socket_of_user.fileno()} {socket_of_user.getpeername()} '
-                                    f'отключился (отправка)')
-                socket_of_user.close()
-                self.sockets_of_clients.remove(socket_of_user)
-                del self.sockets_logins_of_online_users[socket_of_user]
+        elif 'action' in message and message['action'] == 'authorization' and 'time' in message and \
+                'user' in message and 'user_login' in message['user'] and 'user_password' in message['user'] and not \
+                self.database.check_authenticated(user_login, message['user']['user_password']):
+            mes = {
+                'role': 'Неверный логин или пароль',
+                'response': 401
+            }
+            result = serialization_message(mes)
+            app_log_server.info(f'Пользователь {user_login} не авторизирован!')
+            socket_of_user.send(result)
+            app_log_server.info(f'Клиент {socket_of_user.fileno()} {socket_of_user.getpeername()} '
+                                f'отключился (отправка)')
+            socket_of_user.close()
+            self.sockets_of_clients.remove(socket_of_user)
+            del self.sockets_logins_of_online_users[socket_of_user]
 
-            elif check_user_is_online(message['user']['user_login'], self.sockets_logins_of_online_users):
-                mes = {
-                    'role': 'Нет доступа',
-                    'response': 409
-                }
-                result = serialization_message(mes)
-                app_log_server.info(f'Пользователь {user_login} уже есть в системе!')
-                socket_of_user.send(result)
-                app_log_server.info(f'Клиент {socket_of_user.fileno()} {socket_of_user.getpeername()} '
-                                    f'отключился (отправка)')
-                socket_of_user.close()
-                self.sockets_of_clients.remove(socket_of_user)
-                del self.sockets_logins_of_online_users[socket_of_user]
+        elif 'action' in message and message['action'] == 'authorization' and 'time' in message and \
+                'user' in message and 'user_login' in message['user'] and 'user_password' in message['user'] and \
+                self.database.check_authenticated(user_login, message['user']['user_password']) and \
+                check_user_is_online(user_login, self.sockets_logins_of_online_users):
+            mes = {
+                'role': 'Нет доступа',
+                'response': 409
+            }
+            result = serialization_message(mes)
+            app_log_server.info(f'Пользователь {user_login} уже есть в системе!')
+            socket_of_user.send(result)
+            app_log_server.info(f'Клиент {socket_of_user.fileno()} {socket_of_user.getpeername()} '
+                                f'отключился (отправка)')
+            socket_of_user.close()
+            self.sockets_of_clients.remove(socket_of_user)
+            del self.sockets_logins_of_online_users[socket_of_user]
 
         return 'Ok'
 
@@ -260,8 +354,11 @@ class Server(metaclass=ServerVerifier):
         user_login = message['user']['user_login']
         if 'action' in message and message['action'] == 'registration' and 'time' in message and \
                 'user' in message and 'user_login' in message['user'] and 'user_password' in message['user']:
+            # !!!! убрать симметричный ключ с класса и сделать его локально в функции
+            self.SYMMETRIC_KEY = self.generic_symmetric_key_server()
             password_hash = self.database.hash_password(message['user']['user_password'])
-            result = self.database.register(message['user']['user_login'], password_hash)
+            # !!!! исправить функцию register, пароль при входе должен быть паролем, а не хешем, а внутри уже преобразовываться в хеш
+            result = self.database.register(message['user']['user_login'], password_hash, message['public_key'])
             if result == 'Ok':
                 msg = {
                     'response': 200,
@@ -269,8 +366,9 @@ class Server(metaclass=ServerVerifier):
                     'alert': 'Успешная регистрация'
                 }
                 byte_message = serialization_message(msg)
+                result = self.encrypted_message(byte_message, message['public_key'], self.SYMMETRIC_KEY)
                 app_log_server.info(f'Пользователь зарегестрирован!')
-                socket_of_user.send(byte_message)
+                socket_of_user.send(result)
                 socket_of_user.close()
                 self.sockets_of_clients.remove(socket_of_user)
                 del self.sockets_logins_of_online_users[socket_of_user]
@@ -281,14 +379,14 @@ class Server(metaclass=ServerVerifier):
                     'alert': 'Данные не валидны'
                 }
                 byte_message = serialization_message(msg)
+                result = self.encrypted_message(byte_message, message['public_key'], self.SYMMETRIC_KEY)
                 app_log_server.info(f'Пользователь не зарегестрирован!')
-                socket_of_user.send(byte_message)
+                socket_of_user.send(result)
                 socket_of_user.close()
                 self.sockets_of_clients.remove(socket_of_user)
                 del self.sockets_logins_of_online_users[socket_of_user]
 
             return 'Ok'
-
 
     @login_required
     def send_message_user_to_user(self, message, socket_of_user):
@@ -299,12 +397,14 @@ class Server(metaclass=ServerVerifier):
                 'user_login' in message['user'] and self.database.check_login(user_login) and 'token' in message['user'] and \
                 self.database.check_authorized(user_login, message['user']['token']) and 'mess_text' in message and \
                 'to' in message:
-
+            self.database.add_history_message(user_login, message['to'], message['mess_text']['message'],
+                                              message['hash_mes'], message['mess_text']['nonce'])
             msg_to = {
                 "response": 200,
                 'user_name': user_login,
                 'alert': message['mess_text'],
-                'from': message['to']
+                'to': message['to'],
+                'hash_mes': message['hash_mes']
             }
             msg_from = {
                 "response": 200,
@@ -314,17 +414,20 @@ class Server(metaclass=ServerVerifier):
                 'message': message['mess_text']
             }
 
-            hash_mes = self.database.add_history_message(user_login, message['to'], message['mess_text'])
-            msg_from['hash_message'] = hash_mes
             byte_message = serialization_message(msg_from)
             socket_of_user.send(byte_message)
 
             for key, value in self.sockets_logins_of_online_users.items():
                 if value == message['to']:
-                    msg_to['hash_message'] = hash_mes
+                    # msg_to['hash_message'] = hash_mes
                     byte_message = serialization_message(msg_to)
                     key.send(byte_message)
 
+        if 'action' in message and message['action'] == 'presence_answer' and 'time' in message and 'user' in message and \
+                'user_login' in message['user'] and self.database.check_login(user_login) and 'token' in message['user'] and \
+                self.database.check_authorized(user_login, message['user']['token']) and 'mess_text' in message and \
+                'to' in message:
+            self.database.add_history_message(user_login, message['to'], message['message'], message['hash_mes'])
         return 'Ok'
 
     @login_required
@@ -348,13 +451,34 @@ class Server(metaclass=ServerVerifier):
 
         return 'Ok'
 
+    def send_and_get_public_key_user(self, message, socket_of_user):
+        if 'action' in message and message['action'] == 'get_public_key_user':
+            key_user = self.database.get_public_key_user(message['to'])
+            msg = {
+                'response': 200,
+                'alert': 'Публичный ключ пользователя отправлен',
+                'public_key': key_user,
+                'to': message['to']
+            }
+            byte_message = serialization_message(msg)
+            app_log_server.info(f'Публичный ключ отправлен')
+            socket_of_user.send(byte_message)
+
+        return 'Ok'
+
     def send_and_get_public_key_server(self, message, socket_of_user):
-        """Функция принимает сообщение от пользователя на отправку и получение публичного ключа и отправляет ответ"""
+        """
+        Функция принимает сообщение от пользователя на отправку публичного ключа и отправляет в ответ ключ.
+        Сообщение передается в незашифрованном виде
+        :param message:
+        :param socket_of_user:
+        :return:
+        """
         if 'action' in message and message['action'] == 'get_public_key':
             msg = {
                 'response': 200,
                 'alert': 'Публичный ключ отправлен',
-                'public_key': self.PUBLIC_KEY_SERVER.decode(),
+                'public_key': self.PUBLIC_KEY_SERVER,
             }
             byte_message = serialization_message(msg)
             app_log_server.info(f'Публичный ключ отправлен')
@@ -416,7 +540,8 @@ class Server(metaclass=ServerVerifier):
             msg = {
                 'response': 202,
                 'alert': 'Сообщения отправлены',
-                'message': self.database.get_history_message_user(user_login)
+                'message': self.database.get_history_message_user(user_login, message['to']),
+                'to': message['to']
             }
             byte_message = serialization_message(msg)
             app_log_server.info(f'Сообщения пользователя {user_login} готовы!')
@@ -442,22 +567,48 @@ class Server(metaclass=ServerVerifier):
 
     def add_contact_to_user(self, message, socket_of_user):
         """Функция принимает запрос на добавление контакта для пользователя и добавляет его ему в контакты"""
+        # закончили на том, что добавили функционал с добавлением контакта сразу в обе стороны пользователей
+        # + сделали отправку публичных ключей пользователям для общения друг с другом, нужно доработать !!!!!!!!Ё!
         user_login = message['user']['user_login']
         if 'action' in message and message['action'] == 'add_contact' and 'time' in message and \
                 'user' in message and 'user_login' in message['user'] and 'token' in message['user'] and \
                 self.database.check_authorized(user_login, message['user']['token']) and 'user_id' in message and \
                 message['user_id']:
+            # проверяем есть ли добавляемый контакт в базе
             if self.database.check_login(message['user_id']):
+                # если да, то берем его публичный ключ
+                public_key = self.database.get_public_key_user(message['user_id'])
+                # создаем сообщение для ответа
                 msg = {
                     'response': 200,
                     'user_name': user_login,
                     'to_user': message['user_id'],
-                    'alert': f'Пользователь добавлен в контакты'
+                    'alert': f'Пользователь добавлен в контакты',
+                    'public_key_recipient': public_key.replace('\n', '\\n'),
+                    'sender': 'yes'
                 }
+                # переводим сообщение с обьекта в набор json и набор байт
                 byte_message = serialization_message(msg)
+                # добавляем контакт в базу данных (с обоих сторон)
                 self.database.add_contact(user_login, message['user_id'])
                 app_log_server.info(f'Добавлен новый контакт пользователю {user_login}')
+                # отправляем ответ пользователю на добавление контакта
                 socket_of_user.send(byte_message)
+                # перебираем всех пользователей онлайн
+                for key, value in self.sockets_logins_of_online_users.items():
+                    # если пользователь, которого я добавляю в контакты есть в онлайн
+                    if value == message['user_id']:
+                        # отправляем ему сообщение
+                        msg = {
+                            'response': 200,
+                            'user_name': message['user_id'],
+                            'to_user': user_login,
+                            'alert': f'Пользователь добавлен в контакты',
+                            'public_key_recipient': message['public_key'].replace('\n', '\\n')
+                        }
+                        byte_message = serialization_message(msg)
+                        result = self.encrypted_message(byte_message, public_key, self.SYMMETRIC_KEY)
+                        key.send(result)
             else:
                 msg = {
                     'response': 400,

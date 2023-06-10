@@ -1,9 +1,9 @@
 import random
 
 from faker import Faker
-from server_database.model import User, History, Contacts, Base, HistoryMessageUsers
+from backend.server_database.model import User, History, Contacts, Base, HistoryMessageUsers
 import sqlalchemy
-from variables import SQLALCHEMY_SERVER_DATABASE_URL
+from backend.variables import SQLALCHEMY_SERVER_DATABASE_URL
 from sqlalchemy.orm import sessionmaker, aliased
 import secrets, hashlib, uuid
 from sqlalchemy import or_, desc
@@ -48,6 +48,12 @@ class ServerStorage:
             session.commit()
         return token
 
+    def get_public_key_user(self, login):
+        with self.Session() as session:
+            result = session.query(User.public_key).filter(User.login == login).first()
+            session.commit()
+        return result[0]
+
     def logout(self, user_login):
         with self.Session() as session:
             user = session.query(User).filter(User.login == user_login).first()
@@ -56,12 +62,12 @@ class ServerStorage:
             session.commit()
         return 'Ok'
 
-    def register(self, login, password):
+    def register(self, login, password, public_key):
         with self.Session() as session:
             if self.validator_unique_user(login) and self.validator_mail(login):
                 salt = uuid.uuid4().hex
                 hash_password = self.hash_password(salt) + password
-                user = User(login=login, password=hash_password, role='Пользователь', salt=salt)
+                user = User(login=login, password=hash_password, role='Пользователь', salt=salt, public_key=public_key)
                 session.add(user)
                 session.commit()
                 return 'Ok'
@@ -77,9 +83,9 @@ class ServerStorage:
 
     def validator_mail(self, login):
         # сделать с помощью регулярок
-        if '@.' not in login and len(login) < 5 or len(login) > 40:
-            return False
-        return True
+        if '@' in login and 5 < len(login) < 40:
+            return True
+        return False
 
     def hash_password(self, password):
         encode_password = password.encode('utf-8')
@@ -102,6 +108,19 @@ class ServerStorage:
             id_list_contacts = [i.login for i in contacts]
             session.commit()
         return id_list_contacts
+
+    def get_symmetric_key_for_communicate_between_users(self, login_owner, login_client):
+        with self.Session() as session:
+            owner_alias = aliased(User)
+            client_alias = aliased(User)
+            data_contact = session.query(Contacts.symmetric_key).\
+                join(owner_alias, Contacts.owner_id == owner_alias.id).\
+                join(client_alias, Contacts.client_id == client_alias.id).\
+                filter(owner_alias.login == login_owner, client_alias.login == login_client).first()
+            if data_contact[0] is not None:
+                return data_contact[0]
+            session.commit()
+        return None
 
     def get_user_role(self, login):
         with self.Session() as session:
@@ -133,23 +152,24 @@ class ServerStorage:
             session.commit()
         return obj_history
 
-    def add_history_message(self, from_user, to_user, message):
+    def add_history_message(self, from_user, to_user, message, hash_mes='', nonce=''):
         with self.Session() as session:
             from_user_login = session.query(User).filter(User.login == from_user).first()
             to_user_login = session.query(User).filter(User.login == to_user).first()
-            hash_message = str(random.getrandbits(128))
-            new_message = HistoryMessageUsers(from_user_id=from_user_login.id, to_user_id=to_user_login.id, message=message, hash_message=hash_message)
+            new_message = HistoryMessageUsers(from_user_id=from_user_login.id, to_user_id=to_user_login.id,
+                                              message=message, hash_message=hash_mes, nonce=nonce)
             session.add(new_message)
             session.commit()
-        return hash_message
+        return 'Ok'
 
-    def get_history_message_user(self, login):
+    def get_history_message_user(self, login, contact):
         with self.Session() as session:
             a = aliased(User)
-            result = session.query(a.login, User.login, HistoryMessageUsers.message, HistoryMessageUsers.create_at, HistoryMessageUsers.hash_message).\
+            result = session.query(a.login, User.login, HistoryMessageUsers.message, HistoryMessageUsers.create_at, HistoryMessageUsers.hash_message, HistoryMessageUsers.nonce).\
                 join(a, a.id == HistoryMessageUsers.from_user_id).\
                 join(User, User.id == HistoryMessageUsers.to_user_id).\
                 filter(or_(User.login == login, a.login == login)).\
+                filter(or_(User.login == contact, a.login == contact)).\
                 order_by(desc(HistoryMessageUsers.create_at)).\
                 all()
             list_result = []
@@ -159,7 +179,8 @@ class ServerStorage:
                     'from_user': i[0],
                     'to_user': i[1],
                     'date': i[3].strftime('%d-%m-%Y %H-%M-%S'),
-                    'hash_message': i[4]
+                    'hash_message': i[4],
+                    'nonce': i[5]
                 }
                 list_result.append(result_dict)
             session.commit()
@@ -169,8 +190,34 @@ class ServerStorage:
         with self.Session() as session:
             contact = session.query(User).filter(User.login == contact_login).first()
             user = session.query(User).filter(User.login == user_login).first()
-            result = Contacts(owner_id=user.id, client_id=contact.id)
-            session.add(result)
+            owner_alias = aliased(User)
+            client_alias = aliased(User)
+            check_contact = session.query(Contacts). \
+                join(owner_alias, Contacts.owner_id == owner_alias.id). \
+                join(client_alias, Contacts.client_id == client_alias.id). \
+                filter(owner_alias.login == user_login, client_alias.login == contact_login).first()
+            if not check_contact:
+                result = Contacts(owner_id=user.id, client_id=contact.id)
+                session.add(result)
+            check_contact = session.query(Contacts). \
+                join(owner_alias, Contacts.owner_id == owner_alias.id). \
+                join(client_alias, Contacts.client_id == client_alias.id). \
+                filter(owner_alias.login == contact_login, client_alias.login == user_login).first()
+            if not check_contact:
+                result = Contacts(owner_id=contact.id, client_id=user.id)
+                session.add(result)
+            session.commit()
+        return 'Ok'
+
+    def update_contact_add_symmetric_key(self, login_owner, login_client, symmetric_key):
+        with self.Session() as session:
+            owner_alias = aliased(User)
+            client_alias = aliased(User)
+            data_contact = session.query(Contacts).\
+                join(owner_alias, Contacts.owner_id == owner_alias.id).\
+                join(client_alias, Contacts.client_id == client_alias.id).\
+                filter(owner_alias.login == login_owner, client_alias.login == login_client).first()
+            data_contact.symmetric_key = symmetric_key
             session.commit()
         return 'Ok'
 

@@ -1,8 +1,4 @@
 import sys, json, socket, hashlib, logging, inspect
-from Crypto.Cipher import PKCS1_OAEP, AES
-from Crypto.PublicKey import RSA
-from Crypto.Random import get_random_bytes
-import base64
 from server_database.crud import ServerStorage
 
 app_log_server = logging.getLogger('server')
@@ -28,7 +24,7 @@ def login_required(func):
 def install_param_in_socket_server():
     """Устанавливаем введенные пользователем параметры подключения к серверу/создания сервера"""
     param = sys.argv
-    port = 8007
+    port = 8005
     addr = 'localhost'
     try:
         for i in param:
