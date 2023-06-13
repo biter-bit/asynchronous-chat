@@ -1,5 +1,5 @@
 import unittest
-from frontend.client import create_message
+from frontend.src.client import create_message
 import datetime
 
 

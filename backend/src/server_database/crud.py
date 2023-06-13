@@ -1,11 +1,13 @@
 import random
+import secrets
+import hashlib
+import uuid
+import sqlalchemy
 
 from faker import Faker
 from server_database.model import User, History, Contacts, Base, HistoryMessageUsers
-import sqlalchemy
 from variables import SQLALCHEMY_SERVER_DATABASE_URL
 from sqlalchemy.orm import sessionmaker, aliased
-import secrets, hashlib, uuid
 from sqlalchemy import or_, desc
 
 

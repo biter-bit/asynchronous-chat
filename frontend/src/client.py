@@ -13,7 +13,7 @@ from utils_client import decrypted_message
 import datetime, logging, json, threading, random
 from threading import Thread
 from metaclasses import ClientVerifier
-from client_database.crud import ClientStorage
+from frontend.src.client_database.crud import ClientStorage
 from PyQt5.QtCore import QObject, pyqtSignal
 from variables_client import ROOT_DIR
 

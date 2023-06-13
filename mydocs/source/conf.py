@@ -10,8 +10,8 @@ import sys
 
 source_encoding = 'utf-8'
 
-sys.path.insert(2, '/home/michael/python_work/asynchronous_chat_gb/frontend')
-sys.path.insert(1, '/home/michael/python_work/asynchronous_chat_gb/backend')
+sys.path.insert(0, '/home/michael/python_work/asynchronous_chat_gb/frontend')
+sys.path.insert(0, '/home/michael/python_work/asynchronous_chat_gb/backend')
 sys.path.insert(0, '/home/michael/python_work/asynchronous_chat_gb/')
 
 project = 'async_chat'

@@ -22,6 +22,7 @@ app_log_server = logging.getLogger('server')
 
 
 class ServerClass(metaclass=ServerVerifier):
+    port = ServerCheckPort()
     """
     Класс ServerClass принимает подключения от пользователей и обменивается с ними сообщениями
 
@@ -40,7 +41,6 @@ class ServerClass(metaclass=ServerVerifier):
         encrypted_message(msg_byte, public_key, symmetric_key): Шифрует сообщения гибридным шифрованием
         decrypted_message(data, privat_key): Расшифровывает сообщения
     """
-    port = ServerCheckPort()
 
     def __init__(self, addr, port, wait, database):
         self.SYMMETRIC_KEY = None
@@ -178,9 +178,9 @@ class ServerClass(metaclass=ServerVerifier):
         :return: Строку "Ok" или "Error"
         """
         try:
-            with open('backend/secret/keys_server.json', 'w+', encoding='utf-8'):
+            with open('secret/keys_server.json', 'w+', encoding='utf-8'):
                 pass
-            with open('backend/secret/keys_server.json', 'r+', encoding='utf-8') as file:
+            with open('secret/keys_server.json', 'r+', encoding='utf-8') as file:
                 file.seek(0)
                 content = file.read()
                 if content:

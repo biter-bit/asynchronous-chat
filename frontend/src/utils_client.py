@@ -113,7 +113,7 @@ def init_socket_tcp():
 def install_param_in_socket_client():
     """Устанавливаем введенные пользователем параметры подключения к серверу/создания сервера"""
     param = sys.argv
-    port = 8002
+    port = 8001
     addr = 'localhost'
     try:
         for i in param:

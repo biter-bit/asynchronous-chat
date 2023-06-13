@@ -7,6 +7,7 @@ import sys
 from client import authorization, connect_server, init_database, start_thread_client_send, \
     start_thread_client_recipient, registration
 import json
+from variables_client import ROOT_DIR
 
 
 class SearchContactWidget(QWidget):
@@ -427,7 +428,9 @@ class ServerGUI(QMainWindow):
         self.resize(1227, 987)
         self.setMaximumSize(QtCore.QSize(1400, 1100))
         self.setWindowTitle("Асинхронный чат")
-        self.setStyleSheet("QMainWindow { background-image: url(/home/michael/python_work/asynchronous_chat_gb/frontend/img/view.jpg); }")
+        a = f"{{ background-image: url({ROOT_DIR}/img/view.jpg); }}"
+        print(a)
+        self.setStyleSheet(f"QMainWindow {{ background-image: url({ROOT_DIR}/img/view.jpg); }}")
 
         # создаем основной виджет для наших 2 страниц: авторизация, приложение
         self.stack = QStackedWidget(self)
@@ -610,14 +613,14 @@ class ServerGUI(QMainWindow):
         self.to_user = user_obj.text()
         # получяаем публичный ключ пользователя
         self.get_public_key_user(self.to_user)
-        time.sleep(2)
+        time.sleep(1)
         # добавляем симметричный ключ для расшифровки сообщений (может возникнуть ошибка из-за того, что после
         # отправки второго запроса сервер не успевает ответить прежде, чем выполниться get_messages_user
         self.get_symmetric_key(self.to_user)
-        time.sleep(2)
+        time.sleep(1)
         # добавляем сообщения
         self.get_messages_user(self.to_user)
-        time.sleep(2)
+        time.sleep(1)
         # # отображаем переписку
         # self.display_messages(self.to_user)
 
@@ -809,7 +812,6 @@ class ServerGUI(QMainWindow):
 
 
 if __name__ == "__main__":
-
     # создаем приложение
     app = QtWidgets.QApplication(sys.argv)
 
