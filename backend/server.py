@@ -168,7 +168,6 @@ class ServerClass(metaclass=ServerVerifier):
         self.socket_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         app_log_server.info('Сокет инициализирован')
         self.socket_server.bind((self.addr, self.port))
-        print(self.addr, self.port)
         self.socket_server.settimeout(1)
         self.socket_server.listen()
 

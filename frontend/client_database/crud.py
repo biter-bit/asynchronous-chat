@@ -1,5 +1,3 @@
-import random
-
 from faker import Faker
 from client_database.model import History, Contacts, Base, ServerInfo
 import sqlalchemy
@@ -8,7 +6,7 @@ from sqlalchemy import or_
 from variables_client import SQLALCHEMY_SERVER_DATABASE_URL
 from Crypto.Cipher import AES
 import base64
-from utils import deserialization_message
+from utils_client import deserialization_message
 
 
 class ClientStorage:

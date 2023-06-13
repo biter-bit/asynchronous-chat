@@ -3,6 +3,7 @@ import dis
 
 class ClientVerifier(type):
     """ Метакласс для клиента. Запрещает создание сокета и использование методов listen и accept """
+
     def __init__(cls, clsname, base, attrs):
         for k, v in attrs.items():
             try:
@@ -23,6 +24,7 @@ class ServerVerifier(type):
     """
     Метакласс для пользователя. Запрещает использовать метод connect
     """
+    pass
     # def __init__(cls, clsname, base, attrs):
     #     for k, v in attrs.items():
     #         try:
@@ -34,4 +36,3 @@ class ServerVerifier(type):
     #                 if instruction.opname in ('CALL_METHOD', 'LOAD_METHOD') and instruction.argrepr == 'connect':
     #                     raise Exception('Method cannot use connect')
     #     super().__init__(clsname, base, attrs)
-    pass

@@ -24,7 +24,7 @@ def login_required(func):
 def install_param_in_socket_server():
     """Устанавливаем введенные пользователем параметры подключения к серверу/создания сервера"""
     param = sys.argv
-    port = 8005
+    port = 8002
     addr = 'localhost'
     try:
         for i in param:
