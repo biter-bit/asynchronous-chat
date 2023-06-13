@@ -5,7 +5,7 @@ from client_database.model import History, Contacts, Base, ServerInfo
 import sqlalchemy
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import or_
-from variables import SQLALCHEMY_SERVER_DATABASE_URL
+from variables_client import SQLALCHEMY_SERVER_DATABASE_URL
 from Crypto.Cipher import AES
 import base64
 from utils import deserialization_message

@@ -1,9 +1,9 @@
 import random
 
 from faker import Faker
-from backend.server_database.model import User, History, Contacts, Base, HistoryMessageUsers
+from server_database.model import User, History, Contacts, Base, HistoryMessageUsers
 import sqlalchemy
-from backend.variables import SQLALCHEMY_SERVER_DATABASE_URL
+from variables import SQLALCHEMY_SERVER_DATABASE_URL
 from sqlalchemy.orm import sessionmaker, aliased
 import secrets, hashlib, uuid
 from sqlalchemy import or_, desc

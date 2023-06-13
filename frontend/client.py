@@ -1,21 +1,21 @@
 import os.path
 
-from utils import init_socket_tcp
-from utils import deserialization_message
-from utils import serialization_message
-from utils import deserialization_message_list
-from utils import install_param_in_socket_client
-from utils import get_public_key
-from utils import encrypted_message
-from utils import generic_public_and_privat_key_client
-from utils import generic_symmetric_key_client
-from utils import decrypted_message
+from utils_client import init_socket_tcp
+from utils_client import deserialization_message
+from utils_client import serialization_message
+from utils_client import deserialization_message_list
+from utils_client import install_param_in_socket_client
+from utils_client import get_public_key
+from utils_client import encrypted_message
+from utils_client import generic_public_and_privat_key_client
+from utils_client import generic_symmetric_key_client
+from utils_client import decrypted_message
 import datetime, logging, json, threading, random
 from threading import Thread
 from metaclasses import ClientVerifier
 from client_database.crud import ClientStorage
 from PyQt5.QtCore import QObject, pyqtSignal
-from variables import ROOT_DIR
+from variables_client import ROOT_DIR
 
 app_log_client = logging.getLogger('client')
 

@@ -1,5 +1,6 @@
 import logging
 from logging import handlers
+from variables import ROOT_DIR
 
 # создаем обьект логгера с именем "server_back"
 log_server = logging.getLogger('server')
@@ -11,10 +12,10 @@ log_chat = logging.getLogger('chat')
 format_log = logging.Formatter("%(asctime)s %(levelname)s %(filename)s %(message)s")
 
 # создаем обработчик для логгера (куда будут записываться логи)
-fh = handlers.TimedRotatingFileHandler('backend/log/log_server/server.log', when='D', interval=1)
+fh = handlers.TimedRotatingFileHandler(f'{ROOT_DIR}/log/log_server/server.log', when='D', interval=1)
 
 # создаем обработчик для логгера чата
-fh_chat = handlers.TimedRotatingFileHandler('backend/log/log_server/server_chat.log', when='D', interval=1)
+fh_chat = handlers.TimedRotatingFileHandler(f'{ROOT_DIR}/log/log_server/server_chat.log', when='D', interval=1)
 
 # добавляем в обрабочик наш формат сообщений
 fh.setFormatter(format_log)

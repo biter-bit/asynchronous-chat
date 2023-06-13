@@ -12,8 +12,7 @@ from utils import deserialization_message
 from utils import deserialization_message_list
 from utils import login_required
 from server_database.crud import ServerStorage
-from Crypto.Cipher import PKCS1_OAEP
-from Crypto.Cipher import AES
+from Crypto.Cipher import PKCS1_OAEP, AES
 from Crypto.PublicKey import RSA
 from Crypto.Random import get_random_bytes
 
@@ -22,7 +21,25 @@ app_log_chat = logging.getLogger('chat')
 app_log_server = logging.getLogger('server')
 
 
-class Server(metaclass=ServerVerifier):
+class ServerClass(metaclass=ServerVerifier):
+    """
+    Класс ServerClass принимает подключения от пользователей и обменивается с ними сообщениями
+
+    Атрибуты:
+        addr (str): Ip-адрес подключения
+        port (str): Порт подключения
+        wait (int): Ожидание подключения
+        database (type): Обьект базы данных
+
+    Методы:
+        socket_init(): Инициализирует сокет сервера
+        create_keys_for_encryption(): Создает или получает ключи шифрования для сервера (публичный, приватный)
+        get_and_send_message(): Отправляет и получает сообщения от пользователя
+        generic_privat_and_public_keys_server(): Создает ключи шифрования для сервера (публичный, приватный)
+        generic_symmetric_key_server(): Создает симметричный ключ шифрования
+        encrypted_message(msg_byte, public_key, symmetric_key): Шифрует сообщения гибридным шифрованием
+        decrypted_message(data, privat_key): Расшифровывает сообщения
+    """
     port = ServerCheckPort()
 
     def __init__(self, addr, port, wait, database):
@@ -44,41 +61,13 @@ class Server(metaclass=ServerVerifier):
         # создаем обьект, который хранит сокеты и логины пользователей, находящихся онлайн
         self.sockets_logins_of_online_users = {}
 
-    def socket_init(self):
-        self.socket_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        app_log_server.info('Сокет инициализирован')
-        self.socket_server.bind((self.addr, self.port))
-        self.socket_server.settimeout(1)
-        self.socket_server.listen()
-
-    def create_keys_for_encryption(self):
-        try:
-            with open('backend/secret/keys_server.json', 'w+', encoding='utf-8'):
-                pass
-            with open('backend/secret/keys_server.json', 'r+', encoding='utf-8') as file:
-                file.seek(0)
-                content = file.read()
-                if content:
-                    result = json.loads(content)
-                    self.PRIVAT_KEY_SERVER = result['privat_key']
-                    self.PUBLIC_KEY_SERVER = result['public_key']
-                else:
-                    data = {}
-                    self.PRIVAT_KEY_SERVER, self.PUBLIC_KEY_SERVER = self.generic_privat_and_public_keys_server()
-                    data['privat_key'] = self.PRIVAT_KEY_SERVER
-                    data['public_key'] = self.PUBLIC_KEY_SERVER
-                    file.seek(0)
-                    json.dump(data, file)
-                    file.truncate()
-            return 'Ok'
-        except FileNotFoundError:
-            return 'Error'
-
     def get_and_send_message(self):
-        # инициализируем сокет
-        self.socket_init()
+        """
+        Отправляет и получает сообщения от сервера
 
-        # генерируем ключи для сервера
+        :return: Ничего
+        """
+        self.socket_init()
         self.create_keys_for_encryption()
 
         while True:
@@ -170,28 +159,75 @@ class Server(metaclass=ServerVerifier):
                         for mes in self.sockets_message_of_users[socket_of_user]:
                             self.logout_user(mes, socket_of_user)
 
+    def socket_init(self):
+        """
+        Инициализирует сокет сервера
+
+        :return: Ничего
+        """
+        self.socket_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        app_log_server.info('Сокет инициализирован')
+        self.socket_server.bind((self.addr, self.port))
+        print(self.addr, self.port)
+        self.socket_server.settimeout(1)
+        self.socket_server.listen()
+
+    def create_keys_for_encryption(self):
+        """
+        Создает или получает ключи сервера
+
+        :return: Строку "Ok" или "Error"
+        """
+        try:
+            with open('backend/secret/keys_server.json', 'w+', encoding='utf-8'):
+                pass
+            with open('backend/secret/keys_server.json', 'r+', encoding='utf-8') as file:
+                file.seek(0)
+                content = file.read()
+                if content:
+                    result = json.loads(content)
+                    self.PRIVAT_KEY_SERVER = result['privat_key']
+                    self.PUBLIC_KEY_SERVER = result['public_key']
+                else:
+                    data = {}
+                    self.PRIVAT_KEY_SERVER, self.PUBLIC_KEY_SERVER = self.generic_privat_and_public_keys_server()
+                    data['privat_key'] = self.PRIVAT_KEY_SERVER
+                    data['public_key'] = self.PUBLIC_KEY_SERVER
+                    file.seek(0)
+                    json.dump(data, file)
+                    file.truncate()
+            return 'Ok'
+        except FileNotFoundError:
+            return 'Error'
+
     def generic_privat_and_public_keys_server(self):
-        """Генерируем публичный и приватный ключи для шифровки сообщения и возвращаем их в строковом формате"""
+        """
+        Генерируем публичный и приватный ключи для шифровки сообщения и возвращаем их в строковом формате
+
+        :return: Возвращает приватный и публичный ключ сервера. Тип str
+        """
         key = RSA.generate(1024)
         PRIVAT_KEY = key.export_key().decode()
         PUBLIC_KEY = key.public_key().export_key().decode()
         return PRIVAT_KEY, PUBLIC_KEY
 
     def generic_symmetric_key_server(self):
-        """Генерируем симметричный ключ и возвращаем его в строковом формате"""
+        """
+        Генерируем симметричный ключ и возвращаем его в строковом формате
+
+        :return: Возвращает симметричный ключ. Тип bytes
+        """
         SYMMETRIC_KEY = get_random_bytes(16)
         return SYMMETRIC_KEY
 
     def encrypted_message(self, msg_byte, public_key, symmetric_key):
         """
-        Функция шифрует сообщение для дальнейшей отправки. Шифрует сообщение методом гибридного шифрования, т.е.
-        сообщение шифруется, с помощью симметричного ключа, а симметричный ключ шифруется с помощью публичного ключа.
-        Принимает на вход сообщение в бинарном виде, публичный и симметричный ключ в строковом виде.
-        Возвращает готовое сообщение в бинарном виде
-        :param msg_byte:
-        :param public_key:
-        :param symmetric_key:
-        :return:
+        Метод шифрует сообщение методом гибридного шифрования
+
+        :param msg_byte: Кодированное сообщение. Тип binary
+        :param public_key: Публичный ключ пользователя. Тип str
+        :param symmetric_key: Симметричный ключ сообщения. Тип str
+        :return: Зашифрованное и сериализованное сообщение. Тип binary
         """
         nonce = get_random_bytes(16)
         resipient_key = RSA.import_key(public_key)
@@ -210,6 +246,13 @@ class Server(metaclass=ServerVerifier):
         return encode_msg
 
     def decrypted_message(self, data, privat_key):
+        """
+        Метод расшифровывает и десериализует сообщения
+
+        :param data: Кодированное сообщение. Тип binary
+        :param privat_key: Приватный ключ сервера. Тип str
+        :return: Расшифрованное и десериализованное сообщение. Тип dict
+        """
         if data[:10] == b'ENCRYPTED:':
             decode_mes = deserialization_message(data[10:])
             if 'action' in decode_mes and decode_mes['action'] == 'send_message_user':
@@ -226,10 +269,12 @@ class Server(metaclass=ServerVerifier):
 
     def exchange_symmetric_keys_users(self, message, socket_of_user):
         """
-        Функция отправляет симметричный ключ для расшифровки сообщений между пользователями
-        :param message:
-        :param socket_of_user:
-        :return:
+        Метод работает с сохранением, изменением и отправкой симметричного ключа для обмена сообщениями
+        между пользователями
+
+        :param message: Сообщение. Тип dict
+        :param socket_of_user: Сокет пользователя. Тип obj
+        :return: Строку "Ok"
         """
         if message['mess_text'] == 'update':
             self.database.update_contact_add_symmetric_key(
@@ -237,7 +282,6 @@ class Server(metaclass=ServerVerifier):
             )
             return 'Ok'
         elif message['mess_text'] == 'check_sym_key':
-            # проверить есть ли симметричный ключ
             symmetric_key_check_to_user = self.database.get_symmetric_key_for_communicate_between_users(
                 message['to'], message['user']['user_login']
             )
@@ -272,7 +316,13 @@ class Server(metaclass=ServerVerifier):
             return 'Ok'
 
     def authorization_user_on_server(self, message, socket_of_user):
-        """Функция принимает сообщение от пользователя на авторизацию, авторизирует его и отправляет ему ответ"""
+        """
+        Функция принимает сообщение от пользователя на авторизацию, авторизирует его и отправляет ему ответ
+
+        :param message: Сообщение. Тип dict
+        :param socket_of_user: Сокет пользователя. Тип obj
+        :return: Строку "Ok"
+        """
         user_login = message['user']['user_login']
         role_user = self.database.get_user_role(user_login)
         if 'action' in message and message['action'] == 'authorization' and 'time' in message and \
@@ -350,14 +400,18 @@ class Server(metaclass=ServerVerifier):
         return 'Ok'
 
     def registration_user_on_server(self, message, socket_of_user):
-        """Функция принимает сообщение от пользователя на регистрацию, регистрирует его и отправляет ему ответ"""
+        """
+        Функция принимает сообщение от пользователя на регистрацию, регистрирует его и отправляет ему ответ
+
+        :param message: Сообщение. Тип dict
+        :param socket_of_user: Сокет пользователя. Тип obj
+        :return: Строку "Ok"
+        """
         user_login = message['user']['user_login']
         if 'action' in message and message['action'] == 'registration' and 'time' in message and \
                 'user' in message and 'user_login' in message['user'] and 'user_password' in message['user']:
-            # !!!! убрать симметричный ключ с класса и сделать его локально в функции
             self.SYMMETRIC_KEY = self.generic_symmetric_key_server()
             password_hash = self.database.hash_password(message['user']['user_password'])
-            # !!!! исправить функцию register, пароль при входе должен быть паролем, а не хешем, а внутри уже преобразовываться в хеш
             result = self.database.register(message['user']['user_login'], password_hash, message['public_key'])
             if result == 'Ok':
                 msg = {
@@ -390,8 +444,14 @@ class Server(metaclass=ServerVerifier):
 
     @login_required
     def send_message_user_to_user(self, message, socket_of_user):
-        """Функция принимает сообщение от пользователя на отправку сообщения другому пользователю и отправляет
-        его ему"""
+        """
+        Функция принимает сообщение от пользователя на отправку сообщения другому пользователю и отправляет
+        его ему
+
+        :param message: Сообщение. Тип dict
+        :param socket_of_user: Сокет пользователя. Тип obj
+        :return: Строку "Ok"
+        """
         user_login = message['user']['user_login']
         if 'action' in message and message['action'] == 'presence' and 'time' in message and 'user' in message and \
                 'user_login' in message['user'] and self.database.check_login(user_login) and 'token' in message['user'] and \
@@ -419,7 +479,6 @@ class Server(metaclass=ServerVerifier):
 
             for key, value in self.sockets_logins_of_online_users.items():
                 if value == message['to']:
-                    # msg_to['hash_message'] = hash_mes
                     byte_message = serialization_message(msg_to)
                     key.send(byte_message)
 
@@ -432,8 +491,14 @@ class Server(metaclass=ServerVerifier):
 
     @login_required
     def get_all_registered_users(self, message, socket_of_user):
-        """Функция принимает сообщение от пользователя на получение всех логинов пользователей,
-        которые зарегестрирвоаны"""
+        """
+        Функция принимает сообщение от пользователя на получение всех логинов пользователей,
+        которые зарегестрирвоаны
+
+        :param message: Сообщение. Тип dict
+        :param socket_of_user: Сокет пользователя. Тип obj
+        :return: Строку "Ok"
+        """
         user_login = message['user']['user_login']
         if 'action' in message and message['action'] == 'get_users' and 'time' in message and 'user' in message and \
                 'user_login' in message['user'] and self.database.check_login(user_login) and \
@@ -452,6 +517,13 @@ class Server(metaclass=ServerVerifier):
         return 'Ok'
 
     def send_and_get_public_key_user(self, message, socket_of_user):
+        """
+        Берет публичный ключ пользователя из базы данных и отправляет его ему
+
+        :param message: Сообщение от пользователя. Тип dict
+        :param socket_of_user: Сокет пользователя. Тип obj
+        :return: Строка "Ok"
+        """
         if 'action' in message and message['action'] == 'get_public_key_user':
             key_user = self.database.get_public_key_user(message['to'])
             msg = {
@@ -470,6 +542,7 @@ class Server(metaclass=ServerVerifier):
         """
         Функция принимает сообщение от пользователя на отправку публичного ключа и отправляет в ответ ключ.
         Сообщение передается в незашифрованном виде
+
         :param message:
         :param socket_of_user:
         :return:
@@ -487,7 +560,13 @@ class Server(metaclass=ServerVerifier):
         return 'Ok'
 
     def get_statistic_all_users(self, message, socket_of_user):
-        """Функция принимает запрос на получение статистики зарегестрированных пользователей и отправляет ее"""
+        """
+        Функция принимает запрос на получение статистики зарегестрированных пользователей и отправляет ее
+
+        :param message: Сообщение. Тип dict
+        :param socket_of_user: Сокет пользователя. Тип obj
+        :return: Строку "Ok"
+        """
         user_login = message['user']['user_login']
         if 'action' in message and message['action'] == 'get_statistics' and 'time' in message and \
                 'user' in message and 'user_login' in message['user'] and 'token' in message['user'] and \
@@ -514,8 +593,14 @@ class Server(metaclass=ServerVerifier):
         return 'Ok'
 
     def get_target_users(self, message, socket_of_user):
-        """Функция принимает запрос на получение зарегестрированных пользователей, логин которых начинается на
-        определенное значение и отправляет их"""
+        """
+        Функция принимает запрос на получение зарегестрированных пользователей, логин которых начинается на
+        определенное значение и отправляет их
+
+        :param message: Сообщение. Тип dict
+        :param socket_of_user: Сокет пользователя. Тип obj
+        :return: Строку "Ok"
+        """
         user_login = message['user']['user_login']
         if 'action' in message and message['action'] == 'get_target_contact' and 'time' in message and \
                 'user' in message and 'user_login' in message['user'] and 'token' in message['user'] and \
@@ -532,7 +617,13 @@ class Server(metaclass=ServerVerifier):
         return 'Ok'
 
     def get_messages_target_user(self, message, socket_of_user):
-        """Функция принимает запрос на получение всех сообщений определенного пользователя и отправляет их"""
+        """
+        Функция принимает запрос на получение всех сообщений определенного пользователя и отправляет их
+
+        :param message: Сообщение. Тип dict
+        :param socket_of_user: Сокет пользователя. Тип obj
+        :return: Строку "Ok"
+        """
         user_login = message['user']['user_login']
         if 'action' in message and message['action'] == 'get_messages_users' and 'time' in message and \
                 'user' in message and 'user_login' in message['user'] and 'token' in message['user'] and \
@@ -550,7 +641,13 @@ class Server(metaclass=ServerVerifier):
         return 'Ok'
 
     def get_contacts_user(self, message, socket_of_user):
-        """Функция принимает запрос на получение всех контактов определенного пользователя и отправляет их"""
+        """
+        Функция принимает запрос на получение всех контактов определенного пользователя и отправляет их
+
+        :param message: Сообщение. Тип dict
+        :param socket_of_user: Сокет пользователя. Тип obj
+        :return: Строку "Ok"
+        """
         user_login = message['user']['user_login']
         if 'action' in message and message['action'] == 'get_contacts' and 'time' in message and \
                 'user' in message and 'user_login' in message['user'] and 'token' in message['user'] and \
@@ -566,7 +663,13 @@ class Server(metaclass=ServerVerifier):
         return 'Ok'
 
     def add_contact_to_user(self, message, socket_of_user):
-        """Функция принимает запрос на добавление контакта для пользователя и добавляет его ему в контакты"""
+        """
+        Функция принимает запрос на добавление контакта для пользователя и добавляет его ему в контакты
+
+        :param message: Сообщение. Тип dict
+        :param socket_of_user: Сокет пользователя. Тип obj
+        :return: Строку "Ok"
+        """
         # закончили на том, что добавили функционал с добавлением контакта сразу в обе стороны пользователей
         # + сделали отправку публичных ключей пользователям для общения друг с другом, нужно доработать !!!!!!!!Ё!
         user_login = message['user']['user_login']
@@ -621,7 +724,13 @@ class Server(metaclass=ServerVerifier):
         return 'Ok'
 
     def logout_user(self, message, socket_of_user):
-        """Функция принимает запрос на выход из аккаунта и выходит"""
+        """
+        Функция принимает запрос на выход из аккаунта и выходит
+
+        :param message: Сообщение. Тип dict
+        :param socket_of_user: Сокет пользователя. Тип obj
+        :return: Строку "Ok"
+        """
         user_login = message['user']['user_login']
         if 'action' in message and 'time' in message and 'user' in message and 'user_login' in message['user'] and \
                 'token' in message['user'] and self.database.check_authorized(user_login, message['user']['token']):
@@ -640,39 +749,10 @@ class Server(metaclass=ServerVerifier):
 
         return 'Ok'
 
-    def delete_contact_to_user(self):
-        # # если пользователь отправил сообщение на удаление контакта
-        # elif 'action' in message and message['action'] == 'del_contact' and 'time' in message and \
-        #         'user' in message and 'user_login' in message['user'] and 'token' in message['user'] and \
-        #         database.check_authorized(user_login, message['user']['token']) and 'user_id' in message and \
-        #         message['user_id'] and database.check_login(message['user_id']):
-        #     return {'response': 200, 'user_name': user_login, 'to_user': message['user_id'],
-        #             'alert': f'Пользователь удален из контактов'}
-
-        # # если пользователь отправил сообщение на удаление контакта, но контакта в базе нет
-        # elif 'action' in message and message['action'] == 'del_contact' and 'time' in message and \
-        #         'user' in message and 'user_login' in message['user'] and 'token' in message['user'] and \
-        #         database.check_authorized(user_login, message['user']['token']) and 'user_id' in message and \
-        #         message['user_id'] and not database.check_login(message['user_id']):
-        #     return {'response': 400, 'user_name': user_login, 'alert': 'Для удаления пользователь должен быть в базе'}
-        # elif message_of_user['action'] == 'del_contact' \
-        #         and message_response['response'] == 200:
-        #     user = message_of_user['user']['user_login']
-        #     contact = message_of_user['user_id']
-        #     self.database.del_contact(user, contact)
-        #     byte_message = serialization_message(message_response)
-        #     app_log_server.info(f'Удален контакт пользователю {user}')
-        #     socket_of_user.send(byte_message)
-        # elif message_of_user['action'] == 'del_contact' \
-        #         and message_response['response'] == 400:
-        #     byte_message = serialization_message(message_response)
-        #     socket_of_user.send(byte_message)
-        pass
-
 
 def main():
     addr, port = install_param_in_socket_server()
-    obj_server = Server(addr, port, 10, ServerStorage())
+    obj_server = ServerClass(addr, port, 10, ServerStorage())
     obj_server.get_and_send_message()
 
 

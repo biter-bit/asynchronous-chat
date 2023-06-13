@@ -10,6 +10,9 @@ import json
 
 
 class SearchContactWidget(QWidget):
+    """
+    Класс SearchContactWidget является ui, который осуществляет поиск контактов в базе данных сервера и клиента
+    """
     def __init__(self, parent=None):
         super().__init__(parent)
         self.resize(1052, 776)
@@ -75,6 +78,9 @@ class SearchContactWidget(QWidget):
 
 
 class MessageUserWidget(QWidget):
+    """
+    Класс MessageUserWidget является ui, который отображает окно переписки с пользователем
+    """
     def __init__(self, parent=None):
         super().__init__(parent)
         self.resize(1052, 776)
@@ -223,6 +229,9 @@ class MessageWidget(QWidget):
 
 
 class RegisterWidget(QWidget):
+    """
+    Класс RegisterWidget является ui, который отображает окно регистрации пользователя
+    """
     def __init__(self, parent=None):
         super().__init__(parent)
 
@@ -280,6 +289,9 @@ class RegisterWidget(QWidget):
 
 
 class LoginWidget(QWidget):
+    """
+    Класс LoginWidget является ui, который отображает окно авторизации пользователя
+    """
     def __init__(self, parent=None):
         super().__init__(parent)
 
@@ -360,6 +372,9 @@ class LoginWidget(QWidget):
 
 
 class AdminWidget(QWidget):
+    """
+    Класс AdminWidget является ui, который отображает панель администратора
+    """
     def __init__(self, parent=None):
         super().__init__(parent)
 
@@ -396,6 +411,9 @@ class AdminWidget(QWidget):
 
 
 class ServerGUI(QMainWindow):
+    """
+    Класс ServerGUI является основным ui, который связывает весь функционал других модулей ui
+    """
     def __init__(self):
         super().__init__()
 
