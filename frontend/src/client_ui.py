@@ -428,8 +428,6 @@ class ServerGUI(QMainWindow):
         self.resize(1227, 987)
         self.setMaximumSize(QtCore.QSize(1400, 1100))
         self.setWindowTitle("Асинхронный чат")
-        a = f"{{ background-image: url({ROOT_DIR}/img/view.jpg); }}"
-        print(a)
         self.setStyleSheet(f"QMainWindow {{ background-image: url({ROOT_DIR}/img/view.jpg); }}")
 
         # создаем основной виджет для наших 2 страниц: авторизация, приложение
@@ -617,7 +615,7 @@ class ServerGUI(QMainWindow):
         # добавляем симметричный ключ для расшифровки сообщений (может возникнуть ошибка из-за того, что после
         # отправки второго запроса сервер не успевает ответить прежде, чем выполниться get_messages_user
         self.get_symmetric_key(self.to_user)
-        time.sleep(1)
+        time.sleep(2)
         # добавляем сообщения
         self.get_messages_user(self.to_user)
         time.sleep(1)
