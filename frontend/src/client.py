@@ -1,4 +1,5 @@
 import os.path
+import sys
 
 from utils_client import init_socket_tcp
 from utils_client import deserialization_message
@@ -16,6 +17,7 @@ from metaclasses import ClientVerifier
 from client_database.crud import ClientStorage
 from PyQt5.QtCore import QObject, pyqtSignal
 from variables_client import ROOT_DIR
+from log.log_client import client_log_config
 
 app_log_client = logging.getLogger('client')
 
@@ -414,10 +416,10 @@ def authorization(login, password, server):
             return result_data
     except json.JSONDecodeError:
         app_log_client.error('Не удалось декодировать полученную Json строку.')
-        exit(1)
+        sys.exit(1)
     except Exception as er:
         app_log_client.error('Не удалось подключиться к серверу')
-        exit(1)
+        sys.exit(1)
 
 
 def registration(server, login, password):

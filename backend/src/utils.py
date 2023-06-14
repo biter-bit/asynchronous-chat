@@ -24,7 +24,7 @@ def login_required(func):
 def install_param_in_socket_server():
     """Устанавливаем введенные пользователем параметры подключения к серверу/создания сервера"""
     param = sys.argv
-    port = 8001
+    port = 8000
     addr = 'localhost'
     try:
         for i in param:
@@ -101,11 +101,11 @@ def hashing_password(password):
 
 def log(func):
     def wrapper(*args, **kwargs):
-        LOGGER = logging.getLogger('client_front')
-        if 'client_front.py' in sys.argv[0].split('/'):
-            LOGGER = logging.getLogger('client_front')
-        if 'server_back.py' in sys.argv[0].split('/'):
-            LOGGER = logging.getLogger('server_back')
+        LOGGER = logging.getLogger('client')
+        if 'client.py' in sys.argv[0].split('/'):
+            LOGGER = logging.getLogger('client')
+        if 'server.py' in sys.argv[0].split('/'):
+            LOGGER = logging.getLogger('server')
         LOGGER.info(f'Используется функция {func.__name__} с параметрами {args}, {kwargs}. '
                     f'Вызвана из функции {inspect.stack()[1][3]}')
         result = func(*args, **kwargs)

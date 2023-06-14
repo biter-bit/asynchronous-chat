@@ -15,6 +15,8 @@ from server_database.crud import ServerStorage
 from Crypto.Cipher import PKCS1_OAEP, AES
 from Crypto.PublicKey import RSA
 from Crypto.Random import get_random_bytes
+from variables import ROOT_DIR
+from log.log_server import server_log_config
 
 
 app_log_chat = logging.getLogger('chat')
@@ -178,9 +180,9 @@ class ServerClass(metaclass=ServerVerifier):
         :return: Строку "Ok" или "Error"
         """
         try:
-            with open('secret/keys_server.json', 'w+', encoding='utf-8'):
+            with open(f'{ROOT_DIR}/secret/keys_server.json', 'w+', encoding='utf-8'):
                 pass
-            with open('secret/keys_server.json', 'r+', encoding='utf-8') as file:
+            with open(f'{ROOT_DIR}/secret/keys_server.json', 'r+', encoding='utf-8') as file:
                 file.seek(0)
                 content = file.read()
                 if content:

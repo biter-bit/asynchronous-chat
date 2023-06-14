@@ -1,8 +1,9 @@
 import logging
+import sys
 from logging import handlers
 from variables import ROOT_DIR
 
-# создаем обьект логгера с именем "server_back"
+# создаем обьект логгера с именем "server"
 log_server = logging.getLogger('server')
 
 # создаем обьект логгера для фиксации чата с именем "chat"

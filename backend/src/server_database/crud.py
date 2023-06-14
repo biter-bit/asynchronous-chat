@@ -9,6 +9,7 @@ from server_database.model import User, History, Contacts, Base, HistoryMessageU
 from variables import SQLALCHEMY_SERVER_DATABASE_URL
 from sqlalchemy.orm import sessionmaker, aliased
 from sqlalchemy import or_, desc
+from sqlalchemy.sql import default_comparator
 
 
 class ServerStorage:
