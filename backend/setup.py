@@ -1,11 +1,11 @@
 from setuptools import setup, find_packages
 
 setup(
-    name='async_chat_backend',
-    version='1.0.1',
-    description='mess_server_proj',
+    name='chat_async_server',
+    version='1.0.0',
+    description='description',
     author='Michael Kurashev',
     author_email='kurashevmichael@gmail.com',
     packages=find_packages(),
-    install_requires=['PyQt5', 'sqlalchemy', 'pycryptodome', 'pycryptodomex']
+    install_requires=open('requirements.txt').readlines()
 )

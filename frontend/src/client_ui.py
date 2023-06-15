@@ -611,7 +611,7 @@ class ServerGUI(QMainWindow):
         self.to_user = user_obj.text()
         # получяаем публичный ключ пользователя
         self.get_public_key_user(self.to_user)
-        time.sleep(1)
+        time.sleep(2)
         # добавляем симметричный ключ для расшифровки сообщений (может возникнуть ошибка из-за того, что после
         # отправки второго запроса сервер не успевает ответить прежде, чем выполниться get_messages_user
         self.get_symmetric_key(self.to_user)
